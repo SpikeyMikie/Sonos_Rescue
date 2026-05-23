@@ -1,10 +1,7 @@
-appdirs==1.4.4
-certifi==2026.2.25
-charset-normalizer==3.4.7
-idna==3.11
-ifaddr==0.2.0
-lxml==6.0.2
-requests==2.33.1
+mutagen==1.47.0
+Pillow==9.0.1
+Pillow==12.2.0
+PyQt6==6.11.0
+pyqt6_sip==13.11.1
+Requests==2.34.2
 soco==0.31.0
-urllib3==2.6.3
-xmltodict==1.0.4
