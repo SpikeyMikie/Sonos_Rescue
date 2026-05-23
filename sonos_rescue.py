@@ -1,5 +1,4 @@
 # pyright: reportMissingImports=false
-# change 2
 import sys
 import threading
 import time
