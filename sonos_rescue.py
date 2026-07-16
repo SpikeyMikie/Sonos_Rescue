@@ -27,6 +27,7 @@ from mutagen.id3 import ID3  # type: ignore[import]
 # custom handler to suppress logging and handle broken connections gracefully
 class QuietHTTPRequestHandler(SimpleHTTPRequestHandler):
     def copyfile(self, source, outputfile):
+
         try:
             shutil.copyfileobj(source, outputfile)
         except BrokenPipeError:
@@ -37,7 +38,7 @@ class QuietHTTPRequestHandler(SimpleHTTPRequestHandler):
     def log_message(self, format, *args):  # suppress logging
         return
 
-# Simple local HTTP server to serve music files to Sonos
+
 
 
 class LocalMusicServer:
