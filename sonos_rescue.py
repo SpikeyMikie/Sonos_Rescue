@@ -26,37 +26,104 @@ from mutagen.id3 import ID3  # type: ignore[import]
 
 # custom handler to suppress logging and handle broken connections gracefully
 class QuietHTTPRequestHandler(SimpleHTTPRequestHandler):
+     """
+    Custom HTTP request handler for serving local music files to Sonos devices.
+
+    Extends Python's built-in SimpleHTTPRequestHandler to:
+    - Prevent server crashes when Sonos disconnects unexpectedly.
+    - Suppress default HTTP request logging to keep the console output clean.
+
+    This handler is used by the local HTTP server to make locally stored
+    music files accessible through HTTP URLs that Sonos can play.
+    """
     def copyfile(self, source, outputfile):
+        """
+        Copy file data from the requested resource to the HTTP response.
+
+        Overrides the parent class method to gracefully handle cases where
+        the Sonos device disconnects before the file transfer completes.
+
+        Args:
+            source:
+                The file object containing the requested file data.
+            outputfile:
+                The file object used to send data back to the client.
+
+        Returns:
+            None
+        """
 
         try:
             shutil.copyfileobj(source, outputfile)
-        except BrokenPipeError:
-            pass
-        except ConnectionResetError:
+
+        # Sonos may stop requesting data before the transfer finishes,
+        # causing the client connection to close unexpectedly.
+        except (BrokenPipeError, ConnectionResetError):
             pass
 
     def log_message(self, format, *args):  # suppress logging
+        """
+        Disable default HTTP server request logging.
+
+        The parent SimpleHTTPRequestHandler logs every request to the
+        terminal. This is unnecessary for normal operation and would
+        clutter the application's output.
+        """
         return
 
 
 
 
 class LocalMusicServer:
+    """
+    A lightweight HTTP server for serving local music files to Sonos devices.
+
+    Sonos speakers cannot play files directly from the local filesystem, instead
+    they require media to be accessible via an HTTP URL. 
+    
+    The server runs in a daemon thread, allowing it to operate alongside the
+    main application without blocking the GUI.
+    """
     def __init__(self, folder, port=8000):
+        """
+        Initialise the local music server.
+
+        Args:
+            folder (str): Directory containing the music files to serve.
+            port (int, optional): TCP port on which the HTTP server listens.
+                Defaults to 8000.
+        """
         self.folder = folder
         self.port = port
         self.httpd = None
 
     def start(self):
+        """
+        Start the HTTP server in a background thread.
+
+        The server changes the working directory to the configured music
+        folder before serving files. Running the server in a daemon thread
+        allows the GUI to remain responsive while music is streamed to
+        Sonos devices.
+        """
+
+        # Serve files relative to the selected music directory.
         os.chdir(self.folder)
 
         handler = QuietHTTPRequestHandler
         self.httpd = HTTPServer(("0.0.0.0", self.port), handler)
 
+        # Run the HTTP server in the background so it does not block the GUI.
         thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         thread.start()
 
     def stop(self):
+        """
+        Stop the HTTP server if it is running.
+
+        Shuts down the background server, preventing any new HTTP requests
+        from being accepted.
+        """
         if self.httpd:
             self.httpd.shutdown()
 
