@@ -11,15 +11,16 @@ import threading
 import time
 from io import BytesIO
 import soco  # type: ignore[import]
-from soco import SoCo
+from soco import SoCo  # type: ignore[import]
 from typing import Callable
-from PIL import Image  # type: ignore[import]
+from typing import BinaryIO
+from PIL import Image
 from urllib.request import Request, urlopen
-from PyQt6.QtWidgets import ( 
+from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton,
     QVBoxLayout, QHBoxLayout, QListWidget, QSlider, QMessageBox, QFrame,
     QScrollArea, QInputDialog
-    ) 
+)
 from PyQt6.QtCore import Qt  # type: ignore[import]
 from PyQt6.QtGui import QPixmap  # type: ignore[import]
 import os
@@ -32,7 +33,7 @@ from mutagen.id3 import ID3  # type: ignore[import]
 
 # custom handler to suppress logging and handle broken connections gracefully
 class QuietHTTPRequestHandler(SimpleHTTPRequestHandler):
-     """
+    """
     Custom HTTP request handler for serving local music files to Sonos devices.
 
     Extends Python's built-in SimpleHTTPRequestHandler to:
@@ -42,7 +43,12 @@ class QuietHTTPRequestHandler(SimpleHTTPRequestHandler):
     This handler is used by the local HTTP server to make locally stored
     music files accessible through HTTP URLs that Sonos can play.
     """
-    def copyfile(self, source, outputfile):
+
+    def copyfile(  # type: ignore[override]
+        self,
+        source: BinaryIO,
+        outputfile: BinaryIO
+    ) -> None:
         """
         Copy file data from the requested resource to the HTTP response.
 
@@ -67,7 +73,8 @@ class QuietHTTPRequestHandler(SimpleHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass
 
-    def log_message(self, format, *args):  # suppress logging
+    # suppress logging
+    def log_message(self, format: str, *args: object) -> None:
         """
         Disable default HTTP server request logging.
 
@@ -75,9 +82,6 @@ class QuietHTTPRequestHandler(SimpleHTTPRequestHandler):
         terminal. This is unnecessary for normal operation and would
         clutter the application's output.
         """
-        return
-
-
 
 
 class LocalMusicServer:
@@ -86,10 +90,11 @@ class LocalMusicServer:
 
     Sonos speakers cannot play files directly from the local filesystem, instead
     they require media to be accessible via an HTTP URL. 
-    
+
     The server runs in a daemon thread, allowing it to operate alongside the
     main application without blocking the GUI.
     """
+
     def __init__(self, folder, port=8000):
         """
         Initialise the local music server.
@@ -143,6 +148,7 @@ class RoomCard(QFrame):
     RoomCard widgets can be displayed together to create a list of
     available Sonos devices on the network.
     """
+
     def __init__(self, speaker: SoCo, on_select: Callable[[SoCo], None]) -> None:
         """
         Initialise a room card for a Sonos speaker.
@@ -198,6 +204,7 @@ class SonosApp(QWidget):
     files, periodically updates the now playing information, and caches
     album artwork to improve UI responsiveness.
     """
+
     def __init__(self):
         """
         Initialise the main application window.
@@ -209,11 +216,11 @@ class SonosApp(QWidget):
         super().__init__()
         self.setWindowTitle("Sonos Desktop Controller")
         self.setGeometry(100, 100, 1200, 700)
-        
+
         # Sonos devices and playback state
         self.speakers = []
         self.current = None
-        
+
         # Album artwork cache
         self.album_pixmap = None
         self.art_cache = {}

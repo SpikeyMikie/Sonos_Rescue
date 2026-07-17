@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 .env
 secrets.txt
+project-notes.md
