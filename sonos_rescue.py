@@ -129,7 +129,25 @@ class LocalMusicServer:
 
 
 class RoomCard(QFrame):
+    """
+    A GUI card representing a Sonos speaker.
+
+    Displays basic information about a discovered speaker and provides a
+    button that allows the user to select it for control. Multiple
+    RoomCard widgets can be displayed together to create a list of
+    available Sonos devices on the network.
+    """
     def __init__(self, speaker, on_select):
+        """
+        Initialise a room card for a Sonos speaker.
+
+        Args:
+            speaker:
+                The SoCo speaker instance represented by this card.
+            on_select:
+                Callback function executed when the user selects the
+                speaker for control.
+        """
         super().__init__()
         self.speaker = speaker
         self.on_select = on_select
@@ -139,19 +157,25 @@ class RoomCard(QFrame):
 
         layout = QVBoxLayout()
 
-        self.name = QLabel(speaker.player_name)
-        self.status = QLabel("Idle")
+        self.name_label = QLabel(speaker.player_name)
+        self.status_label = QLabel("Idle")
 
-        self.btn = QPushButton("Control")
-        self.btn.clicked.connect(self.select)
+        self.control_button = QPushButton("Control")
+        self.control_button.clicked.connect(self.select)
 
-        layout.addWidget(self.name)
-        layout.addWidget(self.status)
-        layout.addWidget(self.btn)
+        layout.addWidget(self.name_label)
+        layout.addWidget(self.status_label)
+        layout.addWidget(self.control_button)
 
         self.setLayout(layout)
 
     def select(self):
+        """
+        Notify the parent application that this speaker has been selected.
+
+        Invokes the callback supplied during initialisation, passing the
+        associated speaker instance.
+        """
         self.on_select(self.speaker)
 
 
