@@ -1,24 +1,30 @@
-# some new text to test git. 
+"""
+Main entry point for the Sonos Rescue application.
+
+Creates the PyQt6 application instance, initialises the main window,
+and starts the event loop.
+"""
+
 # pyright: reportMissingImports=false
 import sys
 import threading
 import time
 from io import BytesIO
 import soco  # type: ignore[import]
+from soco import SoCo
+from typing import Callable
 from PIL import Image  # type: ignore[import]
 from urllib.request import Request, urlopen
 from PyQt6.QtWidgets import ( 
     QApplication, QWidget, QLabel, QPushButton,
-    QVBoxLayout, QHBoxLayout, QListWidget,
-    QListWidgetItem, QSlider, QMessageBox, QFrame,
+    QVBoxLayout, QHBoxLayout, QListWidget, QSlider, QMessageBox, QFrame,
     QScrollArea, QInputDialog
-) 
+    ) 
 from PyQt6.QtCore import Qt  # type: ignore[import]
 from PyQt6.QtGui import QPixmap  # type: ignore[import]
 import os
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 import socket
-from urllib.parse import quote
 import shutil
 from mutagen.mp3 import MP3  # type: ignore[import]
 from mutagen.id3 import ID3  # type: ignore[import]
@@ -137,7 +143,7 @@ class RoomCard(QFrame):
     RoomCard widgets can be displayed together to create a list of
     available Sonos devices on the network.
     """
-    def __init__(self, speaker, on_select):
+    def __init__(self, speaker: SoCo, on_select: Callable[[SoCo], None]) -> None:
         """
         Initialise a room card for a Sonos speaker.
 
@@ -149,8 +155,8 @@ class RoomCard(QFrame):
                 speaker for control.
         """
         super().__init__()
-        self.speaker = speaker
-        self.on_select = on_select
+        self.speaker: SoCo = speaker
+        self.on_select: Callable[[SoCo], None] = on_select
 
         self.setFrameShape(QFrame.Shape.Box)
         self.setStyleSheet("padding:10px; margin:5px; border-radius:8px;")
@@ -169,37 +175,73 @@ class RoomCard(QFrame):
 
         self.setLayout(layout)
 
-    def select(self):
+    def select(self) -> None:
         """
         Notify the parent application that this speaker has been selected.
 
-        Invokes the callback supplied during initialisation, passing the
-        associated speaker instance.
+        Invokes the callback (created in init), passing the
+        associated instance.
         """
         self.on_select(self.speaker)
 
 
 class SonosApp(QWidget):
+    """
+    M=This is the main application window for Sonos Rescue.
+
+    This class is responsible for building the graphical user interface,
+    discovering Sonos speakers on the local network, handling user
+    interactions, and coordinating playback control through the SoCo
+    library.
+
+    It also manages the local HTTP server used to stream local audio
+    files, periodically updates the now playing information, and caches
+    album artwork to improve UI responsiveness.
+    """
     def __init__(self):
+        """
+        Initialise the main application window.
+
+        Sets up the application state, builds the user interface, discovers
+        available Sonos speakers, and starts the background refresh thread
+        used to keep the displayed playback information up to date.
+        """
         super().__init__()
         self.setWindowTitle("Sonos Desktop Controller")
         self.setGeometry(100, 100, 1200, 700)
+        
+        # Sonos devices and playback state
         self.speakers = []
         self.current = None
+        
+        # Album artwork cache
         self.album_pixmap = None
         self.art_cache = {}
         self.current_art_url = None
+
+        # Build the interface and discover speakers
         self.build_ui()
         self.discover()
+
+        # Start background refresh thread
         self.running = True
         threading.Thread(target=self.refresh_loop, daemon=True).start()
 
-    # ---------------- UI ---------------- #
-    # Build the main UI layout
+    # ------------------------------------------------------------------
+    # User interface construction
+    # ------------------------------------------------------------------
+
     def build_ui(self):
+        """
+        Construct the main application interface.
+
+        Creates the three-panel layout consisting of the speaker list,
+        playback controls, and queue display, and connects the relevant
+        UI controls to their event handlers.
+        """
         root = QHBoxLayout()
 
-        # LEFT: ROOMS PANEL
+        # Left panel: discovered Sonos speakers / rooms
         self.rooms_container_widget = QWidget()
         self.rooms_layout = QVBoxLayout(self.rooms_container_widget)
 
@@ -210,7 +252,7 @@ class SonosApp(QWidget):
         self.rooms_scroll.setWidgetResizable(True)
         self.rooms_scroll.setWidget(self.rooms_container_widget)
 
-        # CENTER: NOW PLAYING
+        # Center panel: now playing information and playback controls
         center_layout = QVBoxLayout()
 
         self.title = QLabel("No room selected")
@@ -254,7 +296,7 @@ class SonosApp(QWidget):
         center_widget = QWidget()
         center_widget.setLayout(center_layout)
 
-        # RIGHT: QUEUE
+        # Right panel: playback queue and utility actions
         right_layout = QVBoxLayout()
 
         self.queue = QListWidget()
@@ -284,9 +326,18 @@ class SonosApp(QWidget):
 
         self.setLayout(root)
 
-    # ---------------- DISCOVERY ---------------- #
+    # ------------------------------------------------------------------
+    # Speaker discovery
+    # ------------------------------------------------------------------
+
     # Discover available Sonos speakers
     def discover(self):
+        """
+        Discover Sonos speakers on the local network.
+
+        Clears any existing room cards and rebuilds the speaker list to
+        reflect the currently available devices.
+        """
         try:
             devices = soco.discover()
             self.speakers = list(devices) if devices else []
@@ -311,14 +362,22 @@ class SonosApp(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
-    # Select a speaker and update UI
-    def select_speaker(self, speaker):
+    def select_speaker(self, speaker: SoCo) -> None:
+        """
+        Make the selected speaker the active playback device.
+
+        Args:
+            speaker: The SoCo speaker instance selected by the user.
+        """
         self.current = speaker
         self.title.setText(speaker.player_name)
 
-    # ---------------- CONTROLS ---------------- #
+    # ------------------------------------------------------------------
+    # Playback controls
+    # ------------------------------------------------------------------
 
     def play_pause(self):
+        """Toggle playback for the selected speaker."""
         if not self.current:
             return
 
@@ -337,20 +396,31 @@ class SonosApp(QWidget):
             print("Play/Pause error:", e)
 
     def next_track(self):
+        """Skip to the next track."""
         if self.current:
             self.current.next()
 
     def prev_track(self):
+        """Return to the previous track."""
         if self.current:
             self.current.previous()
 
     def set_volume(self, v):
+        """Set the volume of the selected speaker."""
         if self.current:
             self.current.volume = v
 
-    # ---------------- NOW PLAYING ---------------- #
+    # ------------------------------------------------------------------
+    # Now playing info
+    # ------------------------------------------------------------------
 
     def update_now_playing(self):
+        """
+        Update the playback information displayed in the user interface.
+
+        Retrieves the currently playing track, refreshes the playback queue,
+        and updates the displayed album artwork when it changes.
+        """
         if not self.current:
             return
         try:
@@ -379,6 +449,13 @@ class SonosApp(QWidget):
             pass
 
     def play_local_file(self):
+        """
+        Play a local audio file through the selected Sonos speaker.
+
+        Starts the local HTTP server if required, extracts embedded album
+        artwork from the audio file, and instructs the speaker to stream the
+        file using its generated HTTP URL.
+        """
         if not self.current:
             return
 
@@ -392,14 +469,14 @@ class SonosApp(QWidget):
             "Audio Files (*.mp3 *.wav *.m4a)"
         )
 
-        # ✅ CRITICAL: stop immediately if no file selected
+        # CRITICAL: stop immediately if no file selected
         if not file_path:
             return
 
         try:
             filename = os.path.basename(file_path)
 
-            # ✅ Extract album art FIRST (safe now)
+            # Extract album art FIRST (safe now)
             art_data = self.get_album_art_from_file(file_path)
             if art_data:
                 pixmap = QPixmap()
@@ -429,6 +506,13 @@ class SonosApp(QWidget):
             QMessageBox.critical(self, "Error", str(e))
 
     def get_album_art_from_file(self, file_path):
+        """
+        Extract any embedded front-cover artwork from an MP3 file.
+
+        Returns:
+            bytes | None: The embedded image data, or None if no artwork is
+            available.
+        """
         try:
             audio = MP3(file_path, ID3=ID3)
 
@@ -444,9 +528,13 @@ class SonosApp(QWidget):
 
         return None
 
-    # Utility to get local IP address for server URL
-
     def get_local_ip(self):
+        """
+        Determine the local IPv4 address of this machine.
+
+        The address is used when constructing URLs that allow Sonos speakers
+        to access locally hosted audio files.
+        """
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             s.connect(("8.8.8.8", 80))
@@ -459,6 +547,12 @@ class SonosApp(QWidget):
 
     # Load and display album art from URL
     def load_art(self, url):
+        """
+        Download and display album artwork.
+
+        Album artwork is cached in memory to reduce network requests and
+        improve UI responsiveness when the same artwork is displayed again.
+        """
         speaker = self.current
         if not speaker:
             return
@@ -503,9 +597,16 @@ class SonosApp(QWidget):
         except Exception as e:
             print("Album load error:", e)
 
-    # ---------------- LOOP ---------------- #
+    # ------------------------------------------------------------------
+    # Background refresh
+    # ------------------------------------------------------------------
 
     def refresh_loop(self):
+        """
+        Background worker that refreshes playback information (every 2 secs).
+
+        Runs in a daemon thread, for the lifetime of the application.
+        """
         while self.running:
             try:
                 self.update_now_playing()
@@ -514,6 +615,12 @@ class SonosApp(QWidget):
             time.sleep(2)
 
     def add_to_queue(self):
+        """
+        Add a network stream or Sonos-compatible URI to the playback queue.
+
+        Prompts the user for a URI and updates the displayed queue after the
+        item has been added.
+        """
         if not self.current:
             QMessageBox.warning(self, "No speaker", "Select a room first")
             return
