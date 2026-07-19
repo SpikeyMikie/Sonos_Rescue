@@ -14,6 +14,7 @@ import soco  # type: ignore[import]
 from soco import SoCo  # type: ignore[import]
 from typing import Callable
 from typing import BinaryIO
+from pathlib import Path
 from PIL import Image
 from urllib.request import Request, urlopen
 from PyQt6.QtWidgets import (
@@ -91,18 +92,24 @@ class LocalMusicServer:
     Sonos speakers cannot play files directly from the local filesystem, instead
     they require media to be accessible via an HTTP URL. 
 
-    The server runs in a daemon thread, allowing it to operate alongside the
+    The server- runs in a daemon thread, allowing it to operate alongside the
     main application without blocking the GUI.
     """
 
-    def __init__(self, folder, port=8000):
+    def __init__(
+            self,
+            folder: Path,
+            port: int = 8000
+    ) -> None:
         """
         Initialise the local music server.
 
         Args:
-            folder (str): Directory containing the music files to serve.
-            port (int, optional): TCP port on which the HTTP server listens.
-                Defaults to 8000.
+        folder:
+            Directory containing the music files to serve.
+        port (optional):
+            TCP port on which the HTTP server listens.
+            Defaults to 8000.
         """
         self.folder = folder
         self.port = port
