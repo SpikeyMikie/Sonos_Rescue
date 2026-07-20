@@ -160,6 +160,11 @@ class LocalMusicServer:
         Sonos devices.
         """
 
+        if not self.folder.is_dir():
+            raise FileNotFoundError(
+                f"Music folder does not exist or is invalid: {self.folder}"
+            )
+
         # Serve files relative to the selected music directory.
         os.chdir(self.folder)
 
