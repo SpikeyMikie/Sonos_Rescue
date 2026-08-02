@@ -165,6 +165,8 @@ class LocalMusicServer:
         allows the GUI to remain responsive while music is streamed to
         Sonos devices.
         """
+        if self.httpd is not None:
+            raise RuntimeError("LocalMusicServer is already running")
 
         if not self.folder.is_dir():
             raise FileNotFoundError(
@@ -192,8 +194,10 @@ class LocalMusicServer:
         Shuts down the background server, preventing any new HTTP requests
         from being accepted.
         """
-        if self.httpd:
+        if self.httpd is not None:
             self.httpd.shutdown()
+            self.httpd.server_close()
+            self.httpd = None
 
     def _create_server(self, handler: type[SimpleHTTPRequestHandler]) -> HTTPServer:
         """
@@ -610,7 +614,7 @@ class SonosApp(QWidget):
             from urllib.parse import quote
 
             ip = self.get_local_ip()
-            url = f"http://{ip}:{self.port}/{quote(filename)}"
+            url = f"http://{ip}:{self.server.port}/{quote(filename)}"
 
             print("Playing:", url)
 

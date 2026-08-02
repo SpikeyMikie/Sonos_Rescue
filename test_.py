@@ -7,6 +7,7 @@ import types
 from types import SimpleNamespace
 import importlib
 from pathlib import Path
+import pytest
 
 
 def _install_stubs():
@@ -321,6 +322,25 @@ def fake_http_server(*args, **kwargs):
     raise OSError(errno.EADDRINUSE, "Address already in use")
 
 
+def test_local_music_server_start_if_already_running_raises_error(tmp_path):
+    """Starting LocalMusicServer if one is already running should raise RuntimeError.
+
+    Args:
+        tmp_path (Path): temporary directory for the server's working folder
+    """
+    mod = _import_module()
+
+    server = mod.LocalMusicServer(tmp_path)
+
+    server.start()
+
+    try:
+        with pytest.raises(RuntimeError, match="already running"):
+            server.start()
+    finally:
+        server.stop()
+
+
 def test_local_music_server_all_ports_occupied(tmp_path):
     """Start a LocalMusicServer when all preferred ports are occupied.
 
@@ -373,7 +393,7 @@ def test_room_card_select_calls_on_select():
         called["s"] = s
 
     card = mod.RoomCard(speaker, on_select)
-    assert card.name._text == "TestRoom"
+    assert card.name_label._text == "TestRoom"
     card.select()
     assert called["s"] is speaker
 
