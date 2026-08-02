@@ -5,3 +5,7 @@ __pycache__/
 .env
 secrets.txt
 project-notes.md
+
+# Coverage
+.coverage
+htmlcov/

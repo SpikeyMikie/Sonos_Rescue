@@ -1,4 +1,7 @@
 # tests for sonos_rescue.py using pytest and light stubs
+from ast import mod
+import errno
+from socket import socket
 import sys
 import types
 from types import SimpleNamespace
@@ -259,6 +262,9 @@ def test_local_music_server_start_stop(tmp_path):
     Ensures `start()` initializes `httpd` (port 0 chosen by OS) and
     `stop()` shuts it down without error. Uses a temporary directory for
     the server's working folder.
+
+    Args:
+            tmp_path (Path): temporary directory for the server's working folder
     """
 
     mod = _import_module()
@@ -267,6 +273,65 @@ def test_local_music_server_start_stop(tmp_path):
     server.start()
     try:
         assert server.httpd is not None
+    finally:
+        server.stop()
+
+
+def test_local_music_server_preferred_port_available(tmp_path):
+    """Start a LocalMusicServer with a preferred port that is available.
+
+    Args:
+        tmp_path (Path): temporary directory for the server's working folder
+    """
+    mod = _import_module()
+    server = mod.LocalMusicServer(folder=(tmp_path), port=8123)
+
+    server.start()
+
+    try:
+        assert server.port == 8123, "expected preferred port to be used"
+    finally:
+        server.stop()
+
+
+def test_local_music_server_preferred_port_occupied(tmp_path):
+    """Start a LocalMusicServer with a preferred port that is already in
+    use and verify it finds the next available port.
+
+    Args:
+        tmp_path (Path): temporary directory for the server's working folder
+    """
+    sock = socket()
+    sock.bind(("127.0.0.1", 8123))
+
+    mod = _import_module()
+    server = mod.LocalMusicServer(folder=str(tmp_path), port=8123)
+    server.start()
+
+    try:
+        assert server.port != 8123, "expected different port due to conflict"
+        assert server.port == 8124, "expected next port to be used"
+    finally:
+        server.stop()
+        sock.close()
+
+
+# helper function to simulate an occupied port by raising OSError
+def fake_http_server(*args, **kwargs):
+    raise OSError(errno.EADDRINUSE, "Address already in use")
+
+
+def test_local_music_server_all_ports_occupied(tmp_path):
+    """Start a LocalMusicServer when all preferred ports are occupied.
+
+    Args:
+        tmp_path (Path): temporary directory for the server's working folder
+    """
+    mod = _import_module()
+    monkeypatch.setattr(mod, "HTTPServer", fake_http_server)
+    server = mod.LocalMusicServer(folder=str(tmp_path), port=8123)
+    try:
+        server.start()
     finally:
         server.stop()
 

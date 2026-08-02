@@ -17,6 +17,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import BinaryIO, Callable, Protocol, cast
 from urllib.request import Request, urlopen
+import errno
 
 # Third-party libraries
 import soco  # type: ignore[reportMissingTypeStubs]
@@ -123,6 +124,8 @@ class QuietHTTPRequestHandler(SimpleHTTPRequestHandler):
         clutter the application's output.
         """
 
+        return None
+
 
 class LocalMusicServer:
     """
@@ -135,7 +138,10 @@ class LocalMusicServer:
     main application without blocking the GUI.
     """
 
-    def __init__(self, folder: Path, port: int = 8000) -> None:
+    DEFAULT_PORT: int = 8000
+    MAX_PORT_ATTEMPTS: int = 50
+
+    def __init__(self, folder: Path, port: int | None = None) -> None:
         """
         Initialise the local music server.
 
@@ -147,7 +153,7 @@ class LocalMusicServer:
             Defaults to 8000.
         """
         self.folder: Path = folder
-        self.port: int = port
+        self.port: int = port if port is not None else self.DEFAULT_PORT
         self.httpd: HTTPServer | None = None
 
     def start(self) -> None:
@@ -169,10 +175,14 @@ class LocalMusicServer:
         os.chdir(self.folder)
 
         handler = QuietHTTPRequestHandler
-        self.httpd = HTTPServer(("0.0.0.0", self.port), handler)
+
+        self.httpd = self._create_server(handler)
 
         # Run the HTTP server in the background so it does not block the GUI.
-        thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        thread = threading.Thread(
+            target=self.httpd.serve_forever,
+            daemon=True,
+        )
         thread.start()
 
     def stop(self) -> None:
@@ -184,6 +194,36 @@ class LocalMusicServer:
         """
         if self.httpd:
             self.httpd.shutdown()
+
+    def _create_server(self, handler: type[SimpleHTTPRequestHandler]) -> HTTPServer:
+        """
+        Create an HTTP server.
+
+        Attempts to bind to the configured port and, if it is already
+        in use, tries successive ports until one is available.
+        """
+        start_port = self.port
+        for port in range(self.port, self.port + self.MAX_PORT_ATTEMPTS):
+            try:
+                server = HTTPServer(("0.0.0.0", port), handler)
+                self.port = port
+                return server
+            except OSError as ose:
+                if ose.errno == errno.EADDRINUSE:
+                    continue
+                else:
+                    raise
+        raise PortInUseError(
+            f"Could not find a free port between "
+            f"{start_port} and "
+            f"{start_port + self.MAX_PORT_ATTEMPTS - 1}."
+        )
+
+
+class PortInUseError(Exception):
+    """Raised when the HTTP server port is already in use."""
+
+    pass
 
 
 class RoomCard(QFrame):
@@ -560,7 +600,7 @@ class SonosApp(QWidget):
             # A temporary HTTP server exposes the selected file so the speaker
             # can stream it using a normal URL.
             if self.server is None:
-                self.server = LocalMusicServer(file_path.parent, 8000)
+                self.server = LocalMusicServer(file_path.parent, self.port)
                 self.server.start()
             else:
                 self.server.folder = file_path.parent
@@ -570,7 +610,7 @@ class SonosApp(QWidget):
             from urllib.parse import quote
 
             ip = self.get_local_ip()
-            url = f"http://{ip}:8000/{quote(filename)}"
+            url = f"http://{ip}:{self.port}/{quote(filename)}"
 
             print("Playing:", url)
 
