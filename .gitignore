@@ -6,6 +6,7 @@ __pycache__/
 secrets.txt
 project-notes.md
 
-# Coverage
+# Testing
+.pytest_cache/
 .coverage
 htmlcov/

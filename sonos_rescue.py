@@ -6,7 +6,6 @@ and starts the event loop.
 """
 
 # Standard library
-import os
 import socket
 import shutil
 import sys
@@ -15,9 +14,10 @@ import time
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from io import BytesIO
 from pathlib import Path
-from typing import BinaryIO, Callable, Protocol, cast
+from typing import BinaryIO, Callable, Protocol, cast, TypeAlias
 from urllib.request import Request, urlopen
 import errno
+from functools import partial
 
 # Third-party libraries
 import soco  # type: ignore[reportMissingTypeStubs]
@@ -174,9 +174,8 @@ class LocalMusicServer:
             )
 
         # Serve files relative to the selected music directory.
-        os.chdir(self.folder)
 
-        handler = QuietHTTPRequestHandler
+        handler = partial(QuietHTTPRequestHandler, directory=str(self.folder))
 
         self.httpd = self._create_server(handler)
 
@@ -199,24 +198,30 @@ class LocalMusicServer:
             self.httpd.server_close()
             self.httpd = None
 
-    def _create_server(self, handler: type[SimpleHTTPRequestHandler]) -> HTTPServer:
+    # type alias for a callable that returns a SimpleHTTPRequestHandler instance.
+    HandlerFactory: TypeAlias = Callable[..., SimpleHTTPRequestHandler]
+
+    def _create_server(self, handler: HandlerFactory) -> HTTPServer:
         """
         Create an HTTP server.
 
         Attempts to bind to the configured port and, if it is already
         in use, tries successive ports until one is available.
         """
+
         start_port = self.port
         for port in range(self.port, self.port + self.MAX_PORT_ATTEMPTS):
             try:
-                server = HTTPServer(("0.0.0.0", port), handler)
+                server = HTTPServer(
+                    ("0.0.0.0", port),
+                    cast(type[SimpleHTTPRequestHandler], handler),
+                )
                 self.port = port
                 return server
             except OSError as ose:
                 if ose.errno == errno.EADDRINUSE:
                     continue
-                else:
-                    raise
+                raise
         raise PortInUseError(
             f"Could not find a free port between "
             f"{start_port} and "
@@ -306,6 +311,7 @@ class SonosApp(QWidget):
         used to keep the displayed playback information up to date.
         """
         super().__init__()
+        self.port: int = LocalMusicServer.DEFAULT_PORT
         self.setWindowTitle("Sonos Desktop Controller")
         self.setGeometry(100, 100, 1200, 700)
 
@@ -313,14 +319,11 @@ class SonosApp(QWidget):
         self.speakers: list[SoCo] = []
         self.current: SoCo | None = None
 
-        # Album artwork cache
         self.art_cache: dict[str, QPixmap] = {}
         self.current_art_url: str | None = None
 
-        # Local music server
         self.server: LocalMusicServer | None = None
 
-        # Build the interface and discover speakers
         self.build_ui()
         self.discover_speakers()
 
@@ -606,9 +609,11 @@ class SonosApp(QWidget):
             if self.server is None:
                 self.server = LocalMusicServer(file_path.parent, self.port)
                 self.server.start()
-            else:
-                self.server.folder = file_path.parent
-                os.chdir(str(self.server.folder))
+
+            elif self.server.folder != file_path.parent:
+                self.server.stop()
+                self.server = LocalMusicServer(file_path.parent, self.port)
+                self.server.start()
 
             # Build URL
             from urllib.parse import quote
