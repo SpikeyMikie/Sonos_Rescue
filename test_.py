@@ -1,6 +1,7 @@
 # tests for sonos_rescue.py using pytest and light stubs
 from ast import mod
 import errno
+import os
 from socket import socket
 import sys
 import types
@@ -190,6 +191,7 @@ def _install_stubs():
         return _Img()
 
     pil_image.__dict__["open"] = open_bytes
+    pil_image.__dict__["Image"] = _Img
     sys.modules["PIL"] = pil
     sys.modules["PIL.Image"] = pil_image
 
@@ -213,10 +215,14 @@ def _install_stubs():
     # soco stub
     soco = types.ModuleType("soco")
 
+    class SoCo:
+        pass
+
     def discover():
         return None
 
     soco.__dict__["discover"] = discover
+    soco.__dict__["SoCo"] = SoCo
     sys.modules["soco"] = soco
 
 
@@ -276,6 +282,22 @@ def test_local_music_server_start_stop(tmp_path):
         assert server.httpd is not None
     finally:
         server.stop()
+
+
+def test_local_music_server_start_preserves_cwd(tmp_path):
+    """Starting the local music server should not change the process cwd."""
+
+    mod = _import_module()
+    before = os.getcwd()
+    server = mod.LocalMusicServer(folder=tmp_path, port=0)
+
+    server.start()
+
+    try:
+        assert os.getcwd() == before
+    finally:
+        server.stop()
+        assert os.getcwd() == before
 
 
 def test_local_music_server_preferred_port_available(tmp_path):
