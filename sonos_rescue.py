@@ -214,7 +214,7 @@ class LocalMusicServer:
             try:
                 server = HTTPServer(
                     ("0.0.0.0", port),
-                    cast(type[SimpleHTTPRequestHandler], handler),
+                    handler,
                 )
                 self.port = port
                 return server
