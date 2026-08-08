@@ -1,5 +1,4 @@
 # tests for sonos_rescue.py using pytest and light stubs
-from ast import mod
 import errno
 import os
 from socket import socket
@@ -8,6 +7,7 @@ import types
 from types import SimpleNamespace
 import importlib
 from pathlib import Path
+from typing import Any
 import pytest
 
 
@@ -25,9 +25,9 @@ def _install_stubs():
         def connect(self, cb):
             self._cb = cb
 
-        def emit(self, *a, **k):
+        def emit(self, *args, **kwargs):
             if self._cb:
-                return self._cb(*a, **k)
+                return self._cb(*args, **kwargs)
 
     class QLabel:
         def __init__(self, text=""):
@@ -250,28 +250,31 @@ def test_quiet_copyfile_handles_errors():
     handler = mod.QuietHTTPRequestHandler.__new__(mod.QuietHTTPRequestHandler)
 
     class BadOutput:
-        def write(self, b):
+        """Output object that raises BrokenPipeError on write."""
+
+        def write(self, _: bytes) -> None:
             raise BrokenPipeError()
 
     # should not raise
     mod.QuietHTTPRequestHandler.copyfile(handler, b"abc", BadOutput())
 
     class BadOutput2:
-        def write(self, b):
+        """Output object that raises ConnectionResetError on write."""
+
+        def write(self, _: bytes) -> None:
             raise ConnectionResetError()
 
     mod.QuietHTTPRequestHandler.copyfile(handler, b"abc", BadOutput2())
 
 
-def test_local_music_server_start_stop(tmp_path):
-    """Start and stop the LocalMusicServer producing an HTTPServer.
+def test_local_music_server_start_stop(tmp_path: Path):
+    """Start and stop the LocalMusicServer.
 
-    Ensures `start()` initializes `httpd` (port 0 chosen by OS) and
-    `stop()` shuts it down without error. Uses a temporary directory for
-    the server's working folder.
+    Ensures `start()` initialises `httpd` and `stop()` shuts down the server
+    without error. Port 0 allows the operating system to select an available port.
 
     Args:
-            tmp_path (Path): temporary directory for the server's working folder
+        tmp_path (Path): Temporary directory used as the server's served folder.
     """
 
     mod = _import_module()
@@ -284,7 +287,7 @@ def test_local_music_server_start_stop(tmp_path):
         server.stop()
 
 
-def test_local_music_server_start_preserves_cwd(tmp_path):
+def test_local_music_server_start_preserves_cwd(tmp_path: Path):
     """Starting the local music server should not change the process cwd."""
 
     mod = _import_module()
@@ -300,14 +303,14 @@ def test_local_music_server_start_preserves_cwd(tmp_path):
         assert os.getcwd() == before
 
 
-def test_local_music_server_preferred_port_available(tmp_path):
-    """Start a LocalMusicServer with a preferred port that is available.
+def test_local_music_server_preferred_port_available(tmp_path: Path):
+    """Start a LocalMusicServer with a preferred port when it is available.
 
     Args:
-        tmp_path (Path): temporary directory for the server's working folder
+        tmp_path (Path): temporary directory for the server's served folder
     """
     mod = _import_module()
-    server = mod.LocalMusicServer(folder=(tmp_path), port=8123)
+    server = mod.LocalMusicServer(folder=tmp_path, port=8123)
 
     server.start()
 
@@ -317,42 +320,47 @@ def test_local_music_server_preferred_port_available(tmp_path):
         server.stop()
 
 
-def test_local_music_server_preferred_port_occupied(tmp_path):
-    """Start a LocalMusicServer with a preferred port that is already in
-    use and verify it finds the next available port.
+def test_local_music_server_preferred_port_occupied(tmp_path: Path):
+    """Use the next available port when the preferred port is occupied.
 
     Args:
-        tmp_path (Path): temporary directory for the server's working folder
+        tmp_path (Path): Temporary directory used as the server's served folder.
     """
     sock = socket()
     sock.bind(("127.0.0.1", 8123))
 
-    mod = _import_module()
-    server = mod.LocalMusicServer(folder=str(tmp_path), port=8123)
-    server.start()
-
     try:
-        assert server.port != 8123, "expected different port due to conflict"
-        assert server.port == 8124, "expected next port to be used"
+        mod = _import_module()
+        server = mod.LocalMusicServer(folder=tmp_path, port=8123)
+        server.start()
+
+        try:
+            assert server.port == 8124
+        finally:
+            server.stop()
     finally:
-        server.stop()
         sock.close()
 
 
 # helper function to simulate an occupied port by raising OSError
-def fake_http_server(*args, **kwargs):
+def fake_http_server(*args: object, **kwargs: object) -> None:
+    """Simulate an OSError caused by an occupied HTTP server port.
+
+    Raises:
+        OSError: Always raised with EADDRINUSE to simulate a port conflict.
+    """
     raise OSError(errno.EADDRINUSE, "Address already in use")
 
 
-def test_local_music_server_start_if_already_running_raises_error(tmp_path):
-    """Starting LocalMusicServer if one is already running should raise RuntimeError.
+def test_local_music_server_start_if_already_running_raises_error(tmp_path: Path):
+    """Raise RuntimeError when starting an already running server.
 
     Args:
-        tmp_path (Path): temporary directory for the server's working folder
+        tmp_path (Path): Temporary directory used as the server's served folder.
     """
     mod = _import_module()
 
-    server = mod.LocalMusicServer(tmp_path)
+    server = mod.LocalMusicServer(folder=tmp_path, port=0)
 
     server.start()
 
@@ -363,38 +371,37 @@ def test_local_music_server_start_if_already_running_raises_error(tmp_path):
         server.stop()
 
 
-def test_local_music_server_all_ports_occupied(tmp_path):
-    """Start a LocalMusicServer when all preferred ports are occupied.
+def test_local_music_server_all_ports_occupied(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Raise PortInUseError when all preferred ports are occupied.
 
     Args:
-        tmp_path (Path): temporary directory for the server's working folder
+        tmp_path (Path): Temporary directory used as the server's served folder.
     """
     mod = _import_module()
     monkeypatch.setattr(mod, "HTTPServer", fake_http_server)
-    server = mod.LocalMusicServer(folder=str(tmp_path), port=8123)
-    try:
+    server = mod.LocalMusicServer(folder=tmp_path, port=8123)
+
+    with pytest.raises(mod.PortInUseError):
         server.start()
-    finally:
-        server.stop()
 
 
-def test_local_music_server_rejects_invalid_folder(tmp_path):
-    """
-    Reject a server folder that does not exist.
+def test_local_music_server_rejects_invalid_folder(tmp_path: Path):
+    """Raise FileNotFoundError when the server folder does not exist.
 
     This exercises the defensive check directly, without needing the file
     picker to produce an invalid path.
-    """
 
+    Args:
+        tmp_path (Path): Temporary directory used to create the missing folder.
+    """
     mod = _import_module()
     missing_folder = tmp_path / "missing"
-    server = mod.LocalMusicServer(Path(missing_folder), port=0)
+    server = mod.LocalMusicServer(folder=missing_folder, port=0)
 
-    try:
+    with pytest.raises(FileNotFoundError, match=str(missing_folder)):
         server.start()
-        assert False, "expected FileNotFoundError"
-    except FileNotFoundError as exc:
-        assert str(missing_folder) in str(exc)
 
 
 def test_room_card_select_calls_on_select():
@@ -411,7 +418,7 @@ def test_room_card_select_calls_on_select():
     speaker = SimpleNamespace(player_name="TestRoom")
     called = {}
 
-    def on_select(s):
+    def on_select(s: SimpleNamespace):
         called["s"] = s
 
     card = mod.RoomCard(speaker, on_select)
@@ -420,7 +427,7 @@ def test_room_card_select_calls_on_select():
     assert called["s"] is speaker
 
 
-def test_get_local_ip_fallback_and_success(monkeypatch):
+def test_get_local_ip_fallback_and_success(monkeypatch: pytest.MonkeyPatch):
     """Test `get_local_ip` returns a routable IP when the socket
     succeeds and falls back to `127.0.0.1` on error.
 
@@ -435,7 +442,7 @@ def test_get_local_ip_fallback_and_success(monkeypatch):
         def __init__(self):
             self._peer = None
 
-        def connect(self, addr):
+        def connect(self, addr: tuple[str, int]) -> None:
             if addr[0] == "8.8.8.8":
                 return
 
@@ -446,7 +453,7 @@ def test_get_local_ip_fallback_and_success(monkeypatch):
             pass
 
     monkeypatch.setattr(
-        mod, "socket", types.SimpleNamespace(socket=lambda *a, **k: FakeSock())
+        mod, "socket", types.SimpleNamespace(socket=lambda **kwargs: FakeSock())  # type: ignore[arg-type]
     )
     ip = mod.SonosApp.get_local_ip(mod.SonosApp.__new__(mod.SonosApp))
     assert ip == "192.0.2.1"
@@ -455,7 +462,7 @@ def test_get_local_ip_fallback_and_success(monkeypatch):
         def __init__(self):
             pass
 
-        def connect(self, addr):
+        def connect(self, addr: tuple[str, int]) -> None:
             raise Exception()
 
         def getsockname(self):
@@ -465,13 +472,15 @@ def test_get_local_ip_fallback_and_success(monkeypatch):
             pass
 
     monkeypatch.setattr(
-        mod, "socket", types.SimpleNamespace(socket=lambda *a, **k: SockErr())
+        mod, "socket", types.SimpleNamespace(socket=lambda **kwargs: SockErr())  # type: ignore[arg-type]
     )
     ip2 = mod.SonosApp.get_local_ip(mod.SonosApp.__new__(mod.SonosApp))
     assert ip2 == "127.0.0.1"
 
 
-def test_get_album_art_from_file_returns_data_and_none(monkeypatch, tmp_path):
+def test_get_album_art_from_file_returns_data_and_none(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
     """Validate `get_album_art_from_file` extracts APIC frame data from
     an MP3 file and returns `None` when MP3 parsing fails.
 
@@ -489,7 +498,7 @@ def test_get_album_art_from_file_returns_data_and_none(monkeypatch, tmp_path):
         data = b"ART"
 
     class FakeMP3:
-        def __init__(self, path, ID3=None):
+        def __init__(self, path: str, ID3: object = None):
             self.tags = {"APIC": Tag()}
 
     monkeypatch.setattr(mod, "MP3", FakeMP3)
@@ -499,7 +508,7 @@ def test_get_album_art_from_file_returns_data_and_none(monkeypatch, tmp_path):
     assert data == b"ART"
 
     # now MP3 raises
-    def bad_mp3(*a, **k):
+    def bad_mp3(*args: object, **kwargs: object) -> None:
         raise Exception("bad")
 
     monkeypatch.setattr(mod, "MP3", bad_mp3)
@@ -507,7 +516,7 @@ def test_get_album_art_from_file_returns_data_and_none(monkeypatch, tmp_path):
     assert data2 is None
 
 
-def test_load_art_fetch_and_cache(monkeypatch):
+def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
     """Exercise `load_art` network fetching and caching behavior.
 
     This creates a minimal `SonosApp`-like object with `current` set,
@@ -525,10 +534,12 @@ def test_load_art_fetch_and_cache(monkeypatch):
     app.current_art_url = None
 
     class AlbumLabel:
-        def __init__(self):
-            self.pix = None
+        """Minimal album label stub for testing."""
 
-        def setPixmap(self, p):
+        def __init__(self):
+            self.pix: Any | None = None
+
+        def setPixmap(self, p: Any):
             self.pix = p
 
     app.album = AlbumLabel()
@@ -538,30 +549,45 @@ def test_load_art_fetch_and_cache(monkeypatch):
         def __enter__(self):
             return self
 
-        def __exit__(self, exc_type, exc, tb):
+        def __exit__(
+            self,
+            exc_type: type | None,
+            exc: BaseException | None,
+            tb: types.TracebackType | None,
+        ) -> bool:
             return False
 
         def read(self):
             return b"IMAGEBYTES"
 
-    monkeypatch.setattr(mod, "urlopen", lambda req, timeout=3: FakeResp())
+    def fake_urlopen(_req: Any, _timeout: int = 3) -> FakeResp:
+        return FakeResp()
+
+    monkeypatch.setattr(mod, "urlopen", fake_urlopen)
 
     # ensure PIL.Image.open returns an object with resize and save
     class ImgObj:
-        def resize(self, size):
+        def resize(self, size: tuple[int, int]):
             return self
 
-        def save(self, fp, format=None):
+        def save(self, fp: Any, format: str | None = None):
             fp.write(b"PNG")
 
-    monkeypatch.setattr(mod, "Image", types.SimpleNamespace(open=lambda b: ImgObj()))
+    def fake_image_open(_b: Any) -> ImgObj:
+        return ImgObj()
+
+    monkeypatch.setattr(
+        mod,
+        "Image",
+        types.SimpleNamespace(open=fake_image_open),
+    )
 
     # simple QPixmap substitute
     class Pix:
         def __init__(self):
             self.data = None
 
-        def loadFromData(self, d):
+        def loadFromData(self, d: bytes):
             self.data = d
 
     monkeypatch.setattr(mod, "QPixmap", Pix)
