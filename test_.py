@@ -1,7 +1,8 @@
 # tests for sonos_rescue.py using pytest and light stubs
 import errno
+import io
 import os
-from socket import socket
+import socket as real_socket
 import sys
 import types
 from types import SimpleNamespace
@@ -75,7 +76,16 @@ def _install_stubs():
             self.title = title
 
     class QFrame:
-        def __init__(self):
+        class Shape:
+            Box = 1
+
+        def setFrameShape(self, shape):
+            pass
+
+        def setStyleSheet(self, *_):
+            pass
+
+        def setLayout(self, *_):
             pass
 
     class QScrollArea:
@@ -131,11 +141,15 @@ def _install_stubs():
         def loadFromData(self, data):
             self.data = data
 
+    class QVBoxLayout:
+        def addWidget(self, widget):
+            pass
+
     QtWidgets.QApplication = QApplication
     QtWidgets.QWidget = QWidget
     QtWidgets.QLabel = QLabel
     QtWidgets.QPushButton = QPushButton
-    QtWidgets.QVBoxLayout = lambda *a, **k: None
+    QtWidgets.QVBoxLayout = QVBoxLayout
     QtWidgets.QHBoxLayout = lambda *a, **k: None
     QtWidgets.QListWidget = QListWidget
     QtWidgets.QListWidgetItem = QListWidgetItem
@@ -256,7 +270,11 @@ def test_quiet_copyfile_handles_errors():
             raise BrokenPipeError()
 
     # should not raise
-    mod.QuietHTTPRequestHandler.copyfile(handler, b"abc", BadOutput())
+    mod.QuietHTTPRequestHandler.copyfile(
+        handler,
+        io.BytesIO(b"abc"),
+        BadOutput(),
+    )
 
     class BadOutput2:
         """Output object that raises ConnectionResetError on write."""
@@ -264,7 +282,11 @@ def test_quiet_copyfile_handles_errors():
         def write(self, _: bytes) -> None:
             raise ConnectionResetError()
 
-    mod.QuietHTTPRequestHandler.copyfile(handler, b"abc", BadOutput2())
+    mod.QuietHTTPRequestHandler.copyfile(
+        handler,
+        io.BytesIO(b"abc"),
+        BadOutput2(),
+    )
 
 
 def test_local_music_server_start_stop(tmp_path: Path):
@@ -278,8 +300,7 @@ def test_local_music_server_start_stop(tmp_path: Path):
     """
 
     mod = _import_module()
-    folder = str(tmp_path)
-    server = mod.LocalMusicServer(folder, port=0)
+    server = mod.LocalMusicServer(tmp_path, port=0)
     server.start()
     try:
         assert server.httpd is not None
@@ -326,7 +347,7 @@ def test_local_music_server_preferred_port_occupied(tmp_path: Path):
     Args:
         tmp_path (Path): Temporary directory used as the server's served folder.
     """
-    sock = socket()
+    sock = real_socket.socket(real_socket.AF_INET, real_socket.SOCK_STREAM)
     sock.bind(("127.0.0.1", 8123))
 
     try:
@@ -427,24 +448,14 @@ def test_room_card_select_calls_on_select():
     assert called["s"] is speaker
 
 
-def test_get_local_ip_fallback_and_success(monkeypatch: pytest.MonkeyPatch):
-    """Test `get_local_ip` returns a routable IP when the socket
-    succeeds and falls back to `127.0.0.1` on error.
-
-    We patch the module's `socket` factory to simulate both a normal
-    socket (returning a specific IP) and a socket that raises on
-    connect to trigger the fallback branch.
-    """
-
+def test_get_local_ip_fallback_and_success(
+    monkeypatch: pytest.MonkeyPatch,
+):
     mod = _import_module()
 
     class FakeSock:
-        def __init__(self):
-            self._peer = None
-
         def connect(self, addr: tuple[str, int]) -> None:
-            if addr[0] == "8.8.8.8":
-                return
+            pass
 
         def getsockname(self):
             return ("192.0.2.1", 12345)
@@ -453,15 +464,19 @@ def test_get_local_ip_fallback_and_success(monkeypatch: pytest.MonkeyPatch):
             pass
 
     monkeypatch.setattr(
-        mod, "socket", types.SimpleNamespace(socket=lambda **kwargs: FakeSock())  # type: ignore[arg-type]
+        mod,
+        "socket",
+        types.SimpleNamespace(
+            AF_INET=real_socket.AF_INET,
+            SOCK_DGRAM=real_socket.SOCK_DGRAM,
+            socket=lambda *args, **kwargs: FakeSock(),
+        ),
     )
+
     ip = mod.SonosApp.get_local_ip(mod.SonosApp.__new__(mod.SonosApp))
     assert ip == "192.0.2.1"
 
     class SockErr:
-        def __init__(self):
-            pass
-
         def connect(self, addr: tuple[str, int]) -> None:
             raise Exception()
 
@@ -472,8 +487,15 @@ def test_get_local_ip_fallback_and_success(monkeypatch: pytest.MonkeyPatch):
             pass
 
     monkeypatch.setattr(
-        mod, "socket", types.SimpleNamespace(socket=lambda **kwargs: SockErr())  # type: ignore[arg-type]
+        mod,
+        "socket",
+        types.SimpleNamespace(
+            AF_INET=real_socket.AF_INET,
+            SOCK_DGRAM=real_socket.SOCK_DGRAM,
+            socket=lambda *args, **kwargs: SockErr(),
+        ),
     )
+
     ip2 = mod.SonosApp.get_local_ip(mod.SonosApp.__new__(mod.SonosApp))
     assert ip2 == "127.0.0.1"
 
