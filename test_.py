@@ -1,5 +1,6 @@
 # tests for sonos_rescue.py using pytest and light stubs
 import errno
+import io
 import os
 from socket import socket
 import sys
@@ -256,7 +257,11 @@ def test_quiet_copyfile_handles_errors():
             raise BrokenPipeError()
 
     # should not raise
-    mod.QuietHTTPRequestHandler.copyfile(handler, b"abc", BadOutput())
+    mod.QuietHTTPRequestHandler.copyfile(
+        handler,
+        io.BytesIO(b"abc"),
+        BadOutput(),
+    )
 
     class BadOutput2:
         """Output object that raises ConnectionResetError on write."""
