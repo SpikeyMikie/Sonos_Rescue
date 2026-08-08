@@ -1,5 +1,4 @@
 # tests for sonos_rescue.py using pytest and light stubs
-from ast import mod
 import errno
 import os
 from socket import socket
@@ -263,15 +262,14 @@ def test_quiet_copyfile_handles_errors():
     mod.QuietHTTPRequestHandler.copyfile(handler, b"abc", BadOutput2())
 
 
-def test_local_music_server_start_stop(tmp_path):
-    """Start and stop the LocalMusicServer producing an HTTPServer.
+def test_local_music_server_start_stop(tmp_path: Path):
+    """Start and stop the LocalMusicServer.
 
-    Ensures `start()` initializes `httpd` (port 0 chosen by OS) and
-    `stop()` shuts it down without error. Uses a temporary directory for
-    the server's working folder.
+    Ensures `start()` initialises `httpd` and `stop()` shuts down the server
+    without error. Port 0 allows the operating system to select an available port.
 
     Args:
-            tmp_path (Path): temporary directory for the server's working folder
+        tmp_path (Path): Temporary directory used as the server's served folder.
     """
 
     mod = _import_module()
@@ -284,7 +282,7 @@ def test_local_music_server_start_stop(tmp_path):
         server.stop()
 
 
-def test_local_music_server_start_preserves_cwd(tmp_path):
+def test_local_music_server_start_preserves_cwd(tmp_path: Path):
     """Starting the local music server should not change the process cwd."""
 
     mod = _import_module()
@@ -300,14 +298,14 @@ def test_local_music_server_start_preserves_cwd(tmp_path):
         assert os.getcwd() == before
 
 
-def test_local_music_server_preferred_port_available(tmp_path):
-    """Start a LocalMusicServer with a preferred port that is available.
+def test_local_music_server_preferred_port_available(tmp_path: Path):
+    """Start a LocalMusicServer with a preferred port when it is available.
 
     Args:
-        tmp_path (Path): temporary directory for the server's working folder
+        tmp_path (Path): temporary directory for the server's served folder
     """
     mod = _import_module()
-    server = mod.LocalMusicServer(folder=(tmp_path), port=8123)
+    server = mod.LocalMusicServer(folder=tmp_path, port=8123)
 
     server.start()
 
@@ -317,42 +315,47 @@ def test_local_music_server_preferred_port_available(tmp_path):
         server.stop()
 
 
-def test_local_music_server_preferred_port_occupied(tmp_path):
-    """Start a LocalMusicServer with a preferred port that is already in
-    use and verify it finds the next available port.
+def test_local_music_server_preferred_port_occupied(tmp_path: Path):
+    """Use the next available port when the preferred port is occupied.
 
     Args:
-        tmp_path (Path): temporary directory for the server's working folder
+        tmp_path (Path): Temporary directory used as the server's served folder.
     """
     sock = socket()
     sock.bind(("127.0.0.1", 8123))
 
-    mod = _import_module()
-    server = mod.LocalMusicServer(folder=str(tmp_path), port=8123)
-    server.start()
-
     try:
-        assert server.port != 8123, "expected different port due to conflict"
-        assert server.port == 8124, "expected next port to be used"
+        mod = _import_module()
+        server = mod.LocalMusicServer(folder=tmp_path, port=8123)
+        server.start()
+
+        try:
+            assert server.port == 8124
+        finally:
+            server.stop()
     finally:
-        server.stop()
         sock.close()
 
 
 # helper function to simulate an occupied port by raising OSError
-def fake_http_server(*args, **kwargs):
+def fake_http_server(*args: object, **kwargs: object) -> None:
+    """Simulate an OSError caused by an occupied HTTP server port.
+
+    Raises:
+        OSError: Always raised with EADDRINUSE to simulate a port conflict.
+    """
     raise OSError(errno.EADDRINUSE, "Address already in use")
 
 
-def test_local_music_server_start_if_already_running_raises_error(tmp_path):
-    """Starting LocalMusicServer if one is already running should raise RuntimeError.
+def test_local_music_server_start_if_already_running_raises_error(tmp_path: Path):
+    """Raise RuntimeError when starting an already running server.
 
     Args:
-        tmp_path (Path): temporary directory for the server's working folder
+        tmp_path (Path): Temporary directory used as the server's served folder.
     """
     mod = _import_module()
 
-    server = mod.LocalMusicServer(tmp_path)
+    server = mod.LocalMusicServer(folder=tmp_path, port=0)
 
     server.start()
 
@@ -363,38 +366,37 @@ def test_local_music_server_start_if_already_running_raises_error(tmp_path):
         server.stop()
 
 
-def test_local_music_server_all_ports_occupied(tmp_path):
-    """Start a LocalMusicServer when all preferred ports are occupied.
+def test_local_music_server_all_ports_occupied(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Raise PortInUseError when all preferred ports are occupied.
 
     Args:
-        tmp_path (Path): temporary directory for the server's working folder
+        tmp_path (Path): Temporary directory used as the server's served folder.
     """
     mod = _import_module()
     monkeypatch.setattr(mod, "HTTPServer", fake_http_server)
-    server = mod.LocalMusicServer(folder=str(tmp_path), port=8123)
-    try:
+    server = mod.LocalMusicServer(folder=tmp_path, port=8123)
+
+    with pytest.raises(mod.PortInUseError):
         server.start()
-    finally:
-        server.stop()
 
 
-def test_local_music_server_rejects_invalid_folder(tmp_path):
-    """
-    Reject a server folder that does not exist.
+def test_local_music_server_rejects_invalid_folder(tmp_path: Path):
+    """Raise FileNotFoundError when the server folder does not exist.
 
     This exercises the defensive check directly, without needing the file
     picker to produce an invalid path.
-    """
 
+    Args:
+        tmp_path (Path): Temporary directory used to create the missing folder.
+    """
     mod = _import_module()
     missing_folder = tmp_path / "missing"
-    server = mod.LocalMusicServer(Path(missing_folder), port=0)
+    server = mod.LocalMusicServer(folder=missing_folder, port=0)
 
-    try:
+    with pytest.raises(FileNotFoundError, match=str(missing_folder)):
         server.start()
-        assert False, "expected FileNotFoundError"
-    except FileNotFoundError as exc:
-        assert str(missing_folder) in str(exc)
 
 
 def test_room_card_select_calls_on_select():
