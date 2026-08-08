@@ -76,7 +76,16 @@ def _install_stubs():
             self.title = title
 
     class QFrame:
-        def __init__(self):
+        class Shape:
+            Box = 1
+
+        def setFrameShape(self, shape):
+            pass
+
+        def setStyleSheet(self, *_):
+            pass
+
+        def setLayout(self, *_):
             pass
 
     class QScrollArea:
@@ -132,11 +141,15 @@ def _install_stubs():
         def loadFromData(self, data):
             self.data = data
 
+    class QVBoxLayout:
+        def addWidget(self, widget):
+            pass
+
     QtWidgets.QApplication = QApplication
     QtWidgets.QWidget = QWidget
     QtWidgets.QLabel = QLabel
     QtWidgets.QPushButton = QPushButton
-    QtWidgets.QVBoxLayout = lambda *a, **k: None
+    QtWidgets.QVBoxLayout = QVBoxLayout
     QtWidgets.QHBoxLayout = lambda *a, **k: None
     QtWidgets.QListWidget = QListWidget
     QtWidgets.QListWidgetItem = QListWidgetItem
