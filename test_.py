@@ -7,6 +7,7 @@ import types
 from types import SimpleNamespace
 import importlib
 from pathlib import Path
+from typing import Any
 import pytest
 
 
@@ -24,9 +25,9 @@ def _install_stubs():
         def connect(self, cb):
             self._cb = cb
 
-        def emit(self, *a, **k):
+        def emit(self, *args, **kwargs):
             if self._cb:
-                return self._cb(*a, **k)
+                return self._cb(*args, **kwargs)
 
     class QLabel:
         def __init__(self, text=""):
@@ -249,14 +250,18 @@ def test_quiet_copyfile_handles_errors():
     handler = mod.QuietHTTPRequestHandler.__new__(mod.QuietHTTPRequestHandler)
 
     class BadOutput:
-        def write(self, b):
+        """Output object that raises BrokenPipeError on write."""
+
+        def write(self, _: bytes) -> None:
             raise BrokenPipeError()
 
     # should not raise
     mod.QuietHTTPRequestHandler.copyfile(handler, b"abc", BadOutput())
 
     class BadOutput2:
-        def write(self, b):
+        """Output object that raises ConnectionResetError on write."""
+
+        def write(self, _: bytes) -> None:
             raise ConnectionResetError()
 
     mod.QuietHTTPRequestHandler.copyfile(handler, b"abc", BadOutput2())
@@ -413,7 +418,7 @@ def test_room_card_select_calls_on_select():
     speaker = SimpleNamespace(player_name="TestRoom")
     called = {}
 
-    def on_select(s):
+    def on_select(s: SimpleNamespace):
         called["s"] = s
 
     card = mod.RoomCard(speaker, on_select)
@@ -422,7 +427,7 @@ def test_room_card_select_calls_on_select():
     assert called["s"] is speaker
 
 
-def test_get_local_ip_fallback_and_success(monkeypatch):
+def test_get_local_ip_fallback_and_success(monkeypatch: pytest.MonkeyPatch):
     """Test `get_local_ip` returns a routable IP when the socket
     succeeds and falls back to `127.0.0.1` on error.
 
@@ -437,7 +442,7 @@ def test_get_local_ip_fallback_and_success(monkeypatch):
         def __init__(self):
             self._peer = None
 
-        def connect(self, addr):
+        def connect(self, addr: tuple[str, int]) -> None:
             if addr[0] == "8.8.8.8":
                 return
 
@@ -448,7 +453,7 @@ def test_get_local_ip_fallback_and_success(monkeypatch):
             pass
 
     monkeypatch.setattr(
-        mod, "socket", types.SimpleNamespace(socket=lambda *a, **k: FakeSock())
+        mod, "socket", types.SimpleNamespace(socket=lambda **kwargs: FakeSock())  # type: ignore[arg-type]
     )
     ip = mod.SonosApp.get_local_ip(mod.SonosApp.__new__(mod.SonosApp))
     assert ip == "192.0.2.1"
@@ -457,7 +462,7 @@ def test_get_local_ip_fallback_and_success(monkeypatch):
         def __init__(self):
             pass
 
-        def connect(self, addr):
+        def connect(self, addr: tuple[str, int]) -> None:
             raise Exception()
 
         def getsockname(self):
@@ -467,13 +472,15 @@ def test_get_local_ip_fallback_and_success(monkeypatch):
             pass
 
     monkeypatch.setattr(
-        mod, "socket", types.SimpleNamespace(socket=lambda *a, **k: SockErr())
+        mod, "socket", types.SimpleNamespace(socket=lambda **kwargs: SockErr())  # type: ignore[arg-type]
     )
     ip2 = mod.SonosApp.get_local_ip(mod.SonosApp.__new__(mod.SonosApp))
     assert ip2 == "127.0.0.1"
 
 
-def test_get_album_art_from_file_returns_data_and_none(monkeypatch, tmp_path):
+def test_get_album_art_from_file_returns_data_and_none(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
     """Validate `get_album_art_from_file` extracts APIC frame data from
     an MP3 file and returns `None` when MP3 parsing fails.
 
@@ -491,7 +498,7 @@ def test_get_album_art_from_file_returns_data_and_none(monkeypatch, tmp_path):
         data = b"ART"
 
     class FakeMP3:
-        def __init__(self, path, ID3=None):
+        def __init__(self, path: str, ID3: object = None):
             self.tags = {"APIC": Tag()}
 
     monkeypatch.setattr(mod, "MP3", FakeMP3)
@@ -501,7 +508,7 @@ def test_get_album_art_from_file_returns_data_and_none(monkeypatch, tmp_path):
     assert data == b"ART"
 
     # now MP3 raises
-    def bad_mp3(*a, **k):
+    def bad_mp3(*args: object, **kwargs: object) -> None:
         raise Exception("bad")
 
     monkeypatch.setattr(mod, "MP3", bad_mp3)
@@ -509,7 +516,7 @@ def test_get_album_art_from_file_returns_data_and_none(monkeypatch, tmp_path):
     assert data2 is None
 
 
-def test_load_art_fetch_and_cache(monkeypatch):
+def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
     """Exercise `load_art` network fetching and caching behavior.
 
     This creates a minimal `SonosApp`-like object with `current` set,
@@ -527,10 +534,12 @@ def test_load_art_fetch_and_cache(monkeypatch):
     app.current_art_url = None
 
     class AlbumLabel:
-        def __init__(self):
-            self.pix = None
+        """Minimal album label stub for testing."""
 
-        def setPixmap(self, p):
+        def __init__(self):
+            self.pix: Any | None = None
+
+        def setPixmap(self, p: Any):
             self.pix = p
 
     app.album = AlbumLabel()
@@ -540,30 +549,45 @@ def test_load_art_fetch_and_cache(monkeypatch):
         def __enter__(self):
             return self
 
-        def __exit__(self, exc_type, exc, tb):
+        def __exit__(
+            self,
+            exc_type: type | None,
+            exc: BaseException | None,
+            tb: types.TracebackType | None,
+        ) -> bool:
             return False
 
         def read(self):
             return b"IMAGEBYTES"
 
-    monkeypatch.setattr(mod, "urlopen", lambda req, timeout=3: FakeResp())
+    def fake_urlopen(_req: Any, _timeout: int = 3) -> FakeResp:
+        return FakeResp()
+
+    monkeypatch.setattr(mod, "urlopen", fake_urlopen)
 
     # ensure PIL.Image.open returns an object with resize and save
     class ImgObj:
-        def resize(self, size):
+        def resize(self, size: tuple[int, int]):
             return self
 
-        def save(self, fp, format=None):
+        def save(self, fp: Any, format: str | None = None):
             fp.write(b"PNG")
 
-    monkeypatch.setattr(mod, "Image", types.SimpleNamespace(open=lambda b: ImgObj()))
+    def fake_image_open(_b: Any) -> ImgObj:
+        return ImgObj()
+
+    monkeypatch.setattr(
+        mod,
+        "Image",
+        types.SimpleNamespace(open=fake_image_open),
+    )
 
     # simple QPixmap substitute
     class Pix:
         def __init__(self):
             self.data = None
 
-        def loadFromData(self, d):
+        def loadFromData(self, d: bytes):
             self.data = d
 
     monkeypatch.setattr(mod, "QPixmap", Pix)
