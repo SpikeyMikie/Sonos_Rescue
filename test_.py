@@ -283,8 +283,7 @@ def test_local_music_server_start_stop(tmp_path: Path):
     """
 
     mod = _import_module()
-    folder = str(tmp_path)
-    server = mod.LocalMusicServer(folder, port=0)
+    server = mod.LocalMusicServer(tmp_path, port=0)
     server.start()
     try:
         assert server.httpd is not None
