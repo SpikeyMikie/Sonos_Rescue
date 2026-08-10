@@ -498,6 +498,7 @@ class SonosApp(QWidget):
         self.album.clear()
         self.artwork_manager.current_art_url = None
         self.artwork_manager.art_cache.clear()
+        self.artwork_manager.displayed_art_url = None
 
     # ------------------------------------------------------------------
     # Now playing info
@@ -520,15 +521,6 @@ class SonosApp(QWidget):
             album = track.get("album", "")
             self.track_info.setText(f"{title}\n{artist}\n{album}")
             art: str | None = track.get("album_art")
-
-            if (
-                art != self.artwork_manager.current_art_url
-            ):  # reset cache if art URL changes
-                if self.artwork_manager.current_art_url is not None:
-                    self.artwork_manager.art_cache.pop(
-                        self.artwork_manager.current_art_url, None
-                    )  # remove old cache
-                self.artwork_manager.current_art_url = art  # reset current art URL
 
             if art:
                 self.artwork_manager.load_art(art, self.current, self.album)
@@ -808,6 +800,7 @@ class ArtworkManager:
     def __init__(self) -> None:
         self.art_cache: dict[str, QPixmap] = {}
         self.current_art_url: str | None = None
+        self.displayed_art_url: str | None = None
 
     def get_album_art_from_file(self, file_path: str | Path) -> bytes | None:
         """
@@ -853,11 +846,10 @@ class ArtworkManager:
                 speaker_ip = cast(str, speaker.ip_address)  # type: ignore
                 url = f"http://{speaker_ip}:1400{url}"
 
-            # If same URL as last time do nothing
-            if url == self.current_art_url:
-                return
-
             self.current_art_url = url
+
+            if url == self.displayed_art_url:
+                return
 
             # If cached use it
             if url in self.art_cache:
@@ -887,6 +879,7 @@ class ArtworkManager:
                 self.art_cache.pop(next(iter(self.art_cache)))
 
             album_label.setPixmap(pixmap)
+            self.displayed_art_url = url
 
         except Exception as e:
             print("Album load error:", e)
