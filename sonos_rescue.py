@@ -14,20 +14,26 @@ import time
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from io import BytesIO
 from pathlib import Path
-from typing import BinaryIO, Callable, Protocol, cast, TypeAlias
 from urllib.request import Request, urlopen
 import errno
 from functools import partial
+from typing import (
+    BinaryIO,
+    Callable,
+    Protocol,
+    cast,
+    TypeAlias,
+)
 
 # Third-party libraries
-import soco  # type: ignore[reportMissingTypeStubs]
+import soco  # type: ignore[import-untyped]
 from mutagen.id3 import ID3
 from mutagen.mp3 import MP3
 from PIL import Image
 from PIL.Image import Image as PILImage
 
 # GUI framework
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QObject, Qt, pyqtSignal
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
@@ -302,7 +308,7 @@ class SonosApp(QWidget):
     - caches album artwork.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Initialise the main application window.
 
@@ -315,17 +321,22 @@ class SonosApp(QWidget):
         self.setWindowTitle("Sonos Desktop Controller")
         self.setGeometry(100, 100, 1200, 700)
 
-        # Sonos devices and playback state
-        self.speakers: list[SoCo] = []
-        self.current: SoCo | None = None
-
         self.art_cache: dict[str, QPixmap] = {}
         self.current_art_url: str | None = None
+        self.current: SoCo | None = None
 
         self.server: LocalMusicServer | None = None
+        self.speaker_manager = SpeakerManager()
 
         self.build_ui()
-        self.discover_speakers()
+
+        self.speaker_manager.speakers_discovered.connect(  # pyright: ignore[reportUnknownMemberType]
+            self.display_speakers
+        )
+
+        self.speaker_manager.speaker_selected.connect(  # pyright: ignore[reportUnknownMemberType]
+            self.display_selected_speaker
+        )
 
         # Start background refresh thread
         self.running = True
@@ -416,9 +427,8 @@ class SonosApp(QWidget):
 
         self.refresh_btn = QPushButton("Refresh Rooms")
         self.refresh_btn.clicked.connect(  # pyright: ignore[reportUnknownMemberType]
-            self.discover_speakers
+            self.speaker_manager.discover_speakers
         )
-
         right_layout.addWidget(QLabel("Queue"))
         right_layout.addWidget(self.queue)
 
@@ -446,52 +456,47 @@ class SonosApp(QWidget):
         self.setLayout(root)
 
     # ------------------------------------------------------------------
-    # Speaker discovery
+    # Display speakers and selected speaker
     # ------------------------------------------------------------------
 
-    # Discover available Sonos speakers
-    def discover_speakers(self) -> None:
+    def display_speakers(self, speakers: list[SoCo]) -> None:
         """
-        Discover Sonos speakers on the local network.
+        Update the GUI with the list of discovered Sonos speakers.
 
         Clears any existing room cards and rebuilds the speaker list to
         reflect the currently available devices.
         """
-        try:
-            devices = cast(
-                set[SoCo] | None,
-                soco.discover(),  # pyright: ignore[reportUnknownMemberType]
-            )
-            self.speakers = list(devices) if devices else []
+        self.speakers = speakers
 
-            # clear old cards
-            for i in reversed(range(self.rooms_layout.count())):
-                item = self.rooms_layout.itemAt(i)
-                widget = item.widget() if item else None
-                if widget:
-                    widget.setParent(None)
-            # add new cards
-            for s in self.speakers:
-                card = RoomCard(s, self.select_speaker)
-                self.rooms_layout.addWidget(card)
+        # clear old cards
+        for i in reversed(range(self.rooms_layout.count())):
+            item = self.rooms_layout.itemAt(i)
+            widget = item.widget() if item else None
+            if widget:
+                widget.setParent(None)
 
-            # adjust scroll area
-            self.rooms_container_widget.adjustSize()
-            self.rooms_scroll.update()
-            self.rooms_container_widget.update()
+        # add new cards
+        for s in self.speakers:
+            card = RoomCard(s, self.speaker_manager.select_speaker)
+            self.rooms_layout.addWidget(card)
 
-        except Exception as e:
-            QMessageBox.critical(self, "Error", str(e))
+        # adjust scroll area
+        self.rooms_container_widget.adjustSize()
+        self.rooms_scroll.update()
+        self.rooms_container_widget.update()
 
-    def select_speaker(self, speaker: SoCo) -> None:
+    def display_selected_speaker(self, speaker: SoCo) -> None:
         """
-        Make the selected speaker the active playback device.
+        Update the GUI to reflect the currently selected Sonos speaker.
 
-        Args:
-            speaker: The SoCo speaker instance selected by the user.
+        Displays the speaker's name and resets the now playing information.
         """
         self.current = speaker
         self.title.setText(speaker.player_name)
+        self.track_info.setText("")
+        self.album.clear()
+        self.current_art_url = None
+        self.art_cache.clear()
 
     # ------------------------------------------------------------------
     # Playback controls
@@ -773,6 +778,55 @@ class SonosApp(QWidget):
 
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
+
+
+class SpeakerManager(QObject):
+    """
+    Manages the discovery and selection of Sonos speakers.
+
+    This class encapsulates the logic for discovering available Sonos devices
+    on the local network, maintaining a list of discovered speakers, and
+    allowing the user to select a speaker for control.
+    """
+
+    speakers_discovered = pyqtSignal(list)
+    speaker_selected = pyqtSignal(object)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.speakers: list[SoCo] = []
+        self.current: SoCo | None = None
+
+    def discover_speakers(self) -> None:
+        """
+        Discover Sonos speakers on the local network.
+
+        Clears any existing room cards and rebuilds the speaker list to
+        reflect the currently available devices.
+        """
+        try:
+            devices = cast(
+                set[SoCo] | None,
+                soco.discover(),  # pyright: ignore[reportUnknownMemberType]
+            )
+            self.speakers = list(devices) if devices else []
+            self.speakers_discovered.emit(self.speakers)
+
+        # Note: changed exception back to a simple print for now, will decide  if signal needed later.
+        # Reason: QMessageBox.critical() expects a QWidget as its parent, whereas self is now a
+        # SpeakerManager, which is a QObject, not a QWidget.
+        except Exception as e:
+            print("Speaker discovery error:", e)
+
+    def select_speaker(self, speaker: SoCo) -> None:
+        """
+        Make the selected speaker the active playback device.
+
+        Args:
+            speaker: The SoCo speaker instance selected by the user.
+        """
+        self.current = speaker
+        self.speaker_selected.emit(speaker)
 
 
 def resize_image(image: PILImage, size: tuple[int, int]) -> PILImage:

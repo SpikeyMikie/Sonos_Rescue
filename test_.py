@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import importlib
 from pathlib import Path
 from typing import Any
+import typing
 import pytest
 
 
@@ -145,12 +146,27 @@ def _install_stubs():
         def addWidget(self, widget):
             pass
 
+    class FakeObject:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+    class FakeSignal:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            self._cb = None
+
+        def connect(self, cb: Any) -> None:
+            self._cb = cb
+
+        def emit(self, *args: Any, **kwargs: Any) -> None:
+            if self._cb:
+                return self._cb(*args, **kwargs)
+
     QtWidgets.QApplication = QApplication
     QtWidgets.QWidget = QWidget
     QtWidgets.QLabel = QLabel
     QtWidgets.QPushButton = QPushButton
     QtWidgets.QVBoxLayout = QVBoxLayout
-    QtWidgets.QHBoxLayout = lambda *a, **k: None
+    QtWidgets.QHBoxLayout = lambda *_args, **_kwargs: None
     QtWidgets.QListWidget = QListWidget
     QtWidgets.QListWidgetItem = QListWidgetItem
     QtWidgets.QSlider = QSlider
@@ -160,7 +176,11 @@ def _install_stubs():
     QtWidgets.QInputDialog = QInputDialog
     QtWidgets.QFileDialog = QFileDialog
 
-    QtCore = types.SimpleNamespace()
+    QtCore = types.SimpleNamespace(
+        QObject=FakeObject,
+        pyqtSignal=FakeSignal,
+    )
+
     QtCore.Qt = types.SimpleNamespace(
         AlignmentFlag=types.SimpleNamespace(AlignCenter=0),
         Orientation=types.SimpleNamespace(Horizontal=0),
@@ -182,6 +202,8 @@ def _install_stubs():
 
     mc = sys.modules["PyQt6.QtCore"]
     mc.__dict__["Qt"] = QtCore.Qt
+    mc.__dict__["QObject"] = QtCore.QObject
+    mc.__dict__["pyqtSignal"] = QtCore.pyqtSignal
 
     mg = sys.modules["PyQt6.QtGui"]
     mg.__dict__["QPixmap"] = QtGui.QPixmap
@@ -469,7 +491,7 @@ def test_get_local_ip_fallback_and_success(
         types.SimpleNamespace(
             AF_INET=real_socket.AF_INET,
             SOCK_DGRAM=real_socket.SOCK_DGRAM,
-            socket=lambda *args, **kwargs: FakeSock(),
+            socket=lambda *_args, **_kwargs: FakeSock(),  # pyright: ignore[reportUnknownLambdaType]
         ),
     )
 
@@ -492,7 +514,7 @@ def test_get_local_ip_fallback_and_success(
         types.SimpleNamespace(
             AF_INET=real_socket.AF_INET,
             SOCK_DGRAM=real_socket.SOCK_DGRAM,
-            socket=lambda *args, **kwargs: SockErr(),
+            socket=lambda *_args, **_kwargs: SockErr(),  # pyright: ignore[reportUnknownLambdaType]
         ),
     )
 
@@ -573,10 +595,10 @@ def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
 
         def __exit__(
             self,
-            exc_type: type | None,
-            exc: BaseException | None,
-            tb: types.TracebackType | None,
-        ) -> bool:
+            _exc_type: type | None,
+            _exc: BaseException | None,
+            _tb: types.TracebackType | None,
+        ) -> typing.Literal[False]:
             return False
 
         def read(self):
