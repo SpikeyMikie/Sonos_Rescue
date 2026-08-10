@@ -326,7 +326,13 @@ class SonosApp(QWidget):
 
         self.speaker_manager = SpeakerManager()
         self.artwork_manager = ArtworkManager()
+        self.playback_controller = PlaybackController(
+            get_current_speaker=lambda: self.current
+        )
+
+        self.play_btn: QPushButton
         self.build_ui()
+
         self.speaker_manager.speakers_discovered.connect(  # pyright: ignore[reportUnknownMemberType]
             self.display_speakers
         )
@@ -383,17 +389,17 @@ class SonosApp(QWidget):
         self.play_btn = QPushButton("Play/Pause")
 
         self.play_btn.clicked.connect(  # pyright: ignore[reportUnknownMemberType]
-            self.play_pause
+            self.handle_play_pause
         )
 
         self.next_btn = QPushButton("Next")
         self.next_btn.clicked.connect(  # pyright: ignore[reportUnknownMemberType]
-            self.next_track
+            self.playback_controller.next_track
         )
 
         self.prev_btn = QPushButton("Prev")
         self.prev_btn.clicked.connect(  # pyright: ignore[reportUnknownMemberType]
-            self.prev_track
+            self.playback_controller.prev_track
         )
 
         controls = QHBoxLayout()
@@ -406,7 +412,7 @@ class SonosApp(QWidget):
         self.volume = QSlider(Qt.Orientation.Horizontal)
         self.volume.setRange(0, 100)
         self.volume.valueChanged.connect(  # pyright: ignore[reportUnknownMemberType]
-            self.set_volume
+            self.playback_controller.set_volume
         )
 
         center_layout.addWidget(QLabel("Volume"))
@@ -492,43 +498,6 @@ class SonosApp(QWidget):
         self.album.clear()
         self.artwork_manager.current_art_url = None
         self.artwork_manager.art_cache.clear()
-
-    # ------------------------------------------------------------------
-    # Playback controls
-    # ------------------------------------------------------------------
-
-    def play_pause(self) -> None:
-        """Toggle playback for the selected speaker."""
-        if not self.current:
-            return
-
-        try:
-            state = self.current.get_current_transport_info()["current_transport_state"]
-
-            if state == "PLAYING":
-                self.current.pause()
-                self.play_btn.setText("Pause")
-            else:
-                self.current.play()  # pyright: ignore[reportUnknownMemberType]
-                self.play_btn.setText("Play")
-
-        except Exception as e:
-            print("Play/Pause error:", e)
-
-    def next_track(self) -> None:
-        """Skip to the next track."""
-        if self.current:
-            self.current.next()
-
-    def prev_track(self) -> None:
-        """Return to the previous track."""
-        if self.current:
-            self.current.previous()
-
-    def set_volume(self, v: int) -> None:
-        """Set the volume of the selected speaker."""
-        if self.current:
-            self.current.volume = v
 
     # ------------------------------------------------------------------
     # Now playing info
@@ -695,6 +664,88 @@ class SonosApp(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
+    def handle_play_pause(self) -> None:
+        """
+        Handle the Play/Pause button click event.
+
+        Toggles playback on the selected speaker and updates the button label
+        to reflect the current playback state.
+        """
+        if not self.current:
+            QMessageBox.warning(self, "No speaker", "Select a room first")
+            return
+
+        self.playback_controller.play_pause()
+
+        try:
+            state = self.current.get_current_transport_info()["current_transport_state"]
+            if state == "PLAYING":
+                self.play_btn.setText("Pause")
+            else:
+                self.play_btn.setText("Play")
+        except Exception:
+            self.play_btn.setText("Play/Pause")
+
+
+class PlaybackController:
+    """
+    Handles playback control for the selected Sonos speaker.
+
+    This class provides methods to play, pause, skip tracks, and adjust
+    volume on the currently selected speaker. It encapsulates the logic
+    for interacting with the SoCo library and ensures that commands are
+    only sent when a speaker is selected.
+    """
+
+    def __init__(self, get_current_speaker: Callable[[], SoCo | None]) -> None:
+        """
+        Initialise the playback controller.
+
+        Args:
+            get_current_speaker:
+                A callable that returns the currently selected SoCo speaker,
+                or None if no speaker is selected.
+        """
+        self.get_current_speaker = get_current_speaker
+
+    def play_pause(self) -> None:
+        """Toggle playback for the selected speaker."""
+        current = self.get_current_speaker()
+        if not current:
+            return
+
+        try:
+            state = current.get_current_transport_info()["current_transport_state"]
+            if state == "PLAYING":
+                current.pause()
+            else:
+                current.play()  # pyright: ignore[reportUnknownMemberType]
+
+        except Exception as e:
+            print("Play/Pause error:", e)
+
+    def next_track(self) -> None:
+        """Skip to the next track."""
+        current = self.get_current_speaker()
+        if current:
+            current.next()
+
+    def prev_track(self) -> None:
+        """Return to the previous track."""
+        current = self.get_current_speaker()
+        if current:
+            current.previous()
+
+    def set_volume(self, v: int) -> None:
+        """Set the volume of the selected speaker."""
+        current = self.get_current_speaker()
+        if current:
+            current.volume = v
+
+    # ------------------------------------------------------------------
+    # Playback controls
+    # ------------------------------------------------------------------
+
 
 class SpeakerManager(QObject):
     """
@@ -771,9 +822,10 @@ class ArtworkManager:
         try:
             audio = MP3(file_path, ID3=ID3)
 
-            tags = cast(
-                dict[object, APICProtocol] | None, audio.tags
-            )  # pyright: ignore[reportUnknownMemberType]
+            tags: dict[object, APICProtocol] | None = cast(
+                dict[object, APICProtocol] | None,
+                audio.tags,  # pyright: ignore[reportUnknownMemberType]
+            )
 
             if tags is None:
                 return None
