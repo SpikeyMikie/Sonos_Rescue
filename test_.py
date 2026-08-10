@@ -547,8 +547,8 @@ def test_get_album_art_from_file_returns_data_and_none(
 
     monkeypatch.setattr(mod, "MP3", FakeMP3)
 
-    app = mod.SonosApp.__new__(mod.SonosApp)
-    data = mod.SonosApp.get_album_art_from_file(app, str(tmp_path / "fake.mp3"))
+    app = mod.ArtworkManager.__new__(mod.ArtworkManager)
+    data = mod.ArtworkManager.get_album_art_from_file(app, str(tmp_path / "fake.mp3"))
     assert data == b"ART"
 
     # now MP3 raises
@@ -556,7 +556,7 @@ def test_get_album_art_from_file_returns_data_and_none(
         raise Exception("bad")
 
     monkeypatch.setattr(mod, "MP3", bad_mp3)
-    data2 = mod.SonosApp.get_album_art_from_file(app, str(tmp_path / "fake.mp3"))
+    data2 = mod.ArtworkManager.get_album_art_from_file(app, str(tmp_path / "fake.mp3"))
     assert data2 is None
 
 
@@ -572,7 +572,7 @@ def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
     mod = _import_module()
 
     # prepare a SonosApp-like object
-    app = mod.SonosApp.__new__(mod.SonosApp)
+    app = mod.ArtworkManager.__new__(mod.ArtworkManager)
     app.current = SimpleNamespace(ip_address="10.0.0.5")
     app.art_cache = {}
     app.current_art_url = None
@@ -586,7 +586,7 @@ def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
         def setPixmap(self, p: Any):
             self.pix = p
 
-    app.album = AlbumLabel()
+    app.album_label = AlbumLabel()
 
     # patch urlopen to return a context manager with .read()
     class FakeResp:
@@ -607,7 +607,11 @@ def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
     def fake_urlopen(_req: Any, _timeout: int = 3) -> FakeResp:
         return FakeResp()
 
-    monkeypatch.setattr(mod, "urlopen", fake_urlopen)
+    monkeypatch.setattr(
+        mod,
+        "urlopen",
+        fake_urlopen,
+    )
 
     # ensure PIL.Image.open returns an object with resize and save
     class ImgObj:
@@ -637,9 +641,9 @@ def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(mod, "QPixmap", Pix)
 
     # run load_art with a non-http url (should be prefixed)
-    mod.SonosApp.load_art(app, "/getaa")
+    mod.ArtworkManager.load_art(app, "fake_url", app.current, app.album_label)
     # should have set current_art_url
     assert app.current_art_url is not None
     # second call with same URL should no-op due to cache
     prev = app.current_art_url
-    mod.SonosApp.load_art(app, prev)
+    mod.ArtworkManager.load_art(app, prev, app.current, app.album_label)

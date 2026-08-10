@@ -321,19 +321,15 @@ class SonosApp(QWidget):
         self.setWindowTitle("Sonos Desktop Controller")
         self.setGeometry(100, 100, 1200, 700)
 
-        self.art_cache: dict[str, QPixmap] = {}
-        self.current_art_url: str | None = None
         self.current: SoCo | None = None
-
         self.server: LocalMusicServer | None = None
+
         self.speaker_manager = SpeakerManager()
-
+        self.artwork_manager = ArtworkManager()
         self.build_ui()
-
         self.speaker_manager.speakers_discovered.connect(  # pyright: ignore[reportUnknownMemberType]
             self.display_speakers
         )
-
         self.speaker_manager.speaker_selected.connect(  # pyright: ignore[reportUnknownMemberType]
             self.display_selected_speaker
         )
@@ -384,8 +380,6 @@ class SonosApp(QWidget):
         center_layout.addWidget(self.album)
         center_layout.addWidget(self.track_info)
 
-        controls = QHBoxLayout()
-
         self.play_btn = QPushButton("Play/Pause")
 
         self.play_btn.clicked.connect(  # pyright: ignore[reportUnknownMemberType]
@@ -402,6 +396,7 @@ class SonosApp(QWidget):
             self.prev_track
         )
 
+        controls = QHBoxLayout()
         controls.addWidget(self.play_btn)
         controls.addWidget(self.prev_btn)
         controls.addWidget(self.next_btn)
@@ -495,8 +490,8 @@ class SonosApp(QWidget):
         self.title.setText(speaker.player_name)
         self.track_info.setText("")
         self.album.clear()
-        self.current_art_url = None
-        self.art_cache.clear()
+        self.artwork_manager.current_art_url = None
+        self.artwork_manager.art_cache.clear()
 
     # ------------------------------------------------------------------
     # Playback controls
@@ -557,13 +552,17 @@ class SonosApp(QWidget):
             self.track_info.setText(f"{title}\n{artist}\n{album}")
             art: str | None = track.get("album_art")
 
-            if art != self.current_art_url:  # reset cache if art URL changes
-                if self.current_art_url is not None:
-                    self.art_cache.pop(self.current_art_url, None)  # remove old cache
-                self.current_art_url = art  # reset current art URL
+            if (
+                art != self.artwork_manager.current_art_url
+            ):  # reset cache if art URL changes
+                if self.artwork_manager.current_art_url is not None:
+                    self.artwork_manager.art_cache.pop(
+                        self.artwork_manager.current_art_url, None
+                    )  # remove old cache
+                self.artwork_manager.current_art_url = art  # reset current art URL
 
             if art:
-                self.load_art(art)
+                self.artwork_manager.load_art(art, self.current, self.album)
 
             # update queue (lightweight)
             q = cast(list[QueueItemProtocol], self.current.get_queue())
@@ -602,7 +601,7 @@ class SonosApp(QWidget):
             filename = file_path.name
 
             # Extract album art FIRST (safe now)
-            art_data = self.get_album_art_from_file(file_path)
+            art_data = self.artwork_manager.get_album_art_from_file(file_path)
             if art_data:
                 pixmap = QPixmap()
                 pixmap.loadFromData(art_data)
@@ -634,34 +633,6 @@ class SonosApp(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
-    def get_album_art_from_file(self, file_path: str | Path) -> bytes | None:
-        """
-        Extract any embedded front-cover artwork from an MP3 file.
-
-        Returns:
-            bytes | None: The embedded image data, or None if no artwork is
-            available.
-        """
-        file_path = Path(file_path)
-
-        try:
-            audio = MP3(file_path, ID3=ID3)
-
-            tags = cast(dict[object, APICProtocol] | None, audio.tags)  # type: ignore
-
-            if tags is None:
-                return None
-
-            for tag in tags.values():
-                if getattr(tag, "FrameID", None) == "APIC":
-                    if getattr(tag, "type", None) == 3:  # 3 = front cover
-                        return tag.data
-
-        except Exception as e:
-            print("Album art error:", e)
-
-        return None
-
     def get_local_ip(self) -> str:
         """
         Determine the local IPv4 address of this machine.
@@ -678,61 +649,6 @@ class SonosApp(QWidget):
         finally:
             s.close()
         return ip
-
-    # Load and display album art from URL
-    def load_art(self, url: str) -> None:
-        """
-        Download and display album artwork.
-
-        Album artwork is cached in memory to reduce network requests and
-        improve UI responsiveness when the same artwork is displayed again.
-        """
-        speaker = self.current
-        if not speaker:
-            return
-
-        try:
-            if not url.startswith("http"):
-                speaker_ip = cast(str, speaker.ip_address)  # type: ignore
-                url = f"http://{speaker_ip}:1400{url}"
-
-            # If same URL as last time do nothing
-            if url == self.current_art_url:
-                return
-
-            self.current_art_url = url
-
-            # If cached use it
-            if url in self.art_cache:
-                self.album.setPixmap(self.art_cache[url])
-                return
-
-            # Otherwise fetch it
-            req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urlopen(req, timeout=3) as response:
-                image_bytes = response.read()
-
-            image_file: PILImage = Image.open(BytesIO(image_bytes))
-            size: tuple[int, int] = (300, 300)
-            resized_image = resize_image(image_file, size)
-
-            png_buffer = BytesIO()
-            resized_image.save(png_buffer, format="PNG")
-
-            pixmap = QPixmap()
-            pixmap.loadFromData(png_buffer.getvalue())
-
-            # Store in cache
-            self.art_cache[url] = pixmap
-            MAX_CACHE = 20
-
-            if len(self.art_cache) > MAX_CACHE:
-                self.art_cache.pop(next(iter(self.art_cache)))
-
-            self.album.setPixmap(pixmap)
-
-        except Exception as e:
-            print("Album load error:", e)
 
     # ------------------------------------------------------------------
     # Background refresh
@@ -827,6 +743,101 @@ class SpeakerManager(QObject):
         """
         self.current = speaker
         self.speaker_selected.emit(speaker)
+
+
+class ArtworkManager:
+    """
+    Manages the retrieval and caching of album artwork.
+
+    This class handles downloading album artwork from Sonos devices,
+    resizing images for display, and caching them in memory to improve
+    performance and reduce network requests.
+    """
+
+    def __init__(self) -> None:
+        self.art_cache: dict[str, QPixmap] = {}
+        self.current_art_url: str | None = None
+
+    def get_album_art_from_file(self, file_path: str | Path) -> bytes | None:
+        """
+        Extract any embedded front-cover artwork from an MP3 file.
+
+        Returns:
+            bytes | None: The embedded image data, or None if no artwork is
+            available.
+        """
+        file_path = Path(file_path)
+
+        try:
+            audio = MP3(file_path, ID3=ID3)
+
+            tags = cast(
+                dict[object, APICProtocol] | None, audio.tags
+            )  # pyright: ignore[reportUnknownMemberType]
+
+            if tags is None:
+                return None
+
+            for tag in tags.values():
+                if getattr(tag, "FrameID", None) == "APIC":
+                    if getattr(tag, "type", None) == 3:  # 3 = front cover
+                        return tag.data
+
+        except Exception as e:
+            print("Album art error:", e)
+
+        return None
+
+    # Load and display album art from URL
+    def load_art(self, url: str, speaker: SoCo, album_label: QLabel) -> None:
+        """
+        Download and display album artwork.
+
+        Album artwork is cached in memory to reduce network requests and
+        improve UI responsiveness when the same artwork is displayed again.
+        """
+        try:
+            if not url.startswith("http"):
+                speaker_ip = cast(str, speaker.ip_address)  # type: ignore
+                url = f"http://{speaker_ip}:1400{url}"
+
+            # If same URL as last time do nothing
+            if url == self.current_art_url:
+                return
+
+            self.current_art_url = url
+
+            # If cached use it
+            if url in self.art_cache:
+                album_label.setPixmap(self.art_cache[url])
+                return
+
+            # Otherwise fetch it
+            req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urlopen(req, timeout=3) as response:
+                image_bytes = response.read()
+
+            image_file: PILImage = Image.open(BytesIO(image_bytes))
+            size: tuple[int, int] = (300, 300)
+            resized_image = resize_image(image_file, size)
+
+            png_buffer = BytesIO()
+            resized_image.save(png_buffer, format="PNG")
+
+            pixmap = QPixmap()
+            pixmap.loadFromData(png_buffer.getvalue())
+
+            # Store in cache
+            self.art_cache[url] = pixmap
+            MAX_CACHE = 20
+
+            if len(self.art_cache) > MAX_CACHE:
+                self.art_cache.pop(next(iter(self.art_cache)))
+
+            album_label.setPixmap(pixmap)
+
+        except Exception as e:
+            print("Album load error:", e)
 
 
 def resize_image(image: PILImage, size: tuple[int, int]) -> PILImage:
