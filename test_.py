@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import importlib
 from pathlib import Path
 from typing import Any
+import typing
 import pytest
 
 
@@ -145,12 +146,27 @@ def _install_stubs():
         def addWidget(self, widget):
             pass
 
+    class FakeObject:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+    class FakeSignal:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            self._cb = None
+
+        def connect(self, cb: Any) -> None:
+            self._cb = cb
+
+        def emit(self, *args: Any, **kwargs: Any) -> None:
+            if self._cb:
+                return self._cb(*args, **kwargs)
+
     QtWidgets.QApplication = QApplication
     QtWidgets.QWidget = QWidget
     QtWidgets.QLabel = QLabel
     QtWidgets.QPushButton = QPushButton
     QtWidgets.QVBoxLayout = QVBoxLayout
-    QtWidgets.QHBoxLayout = lambda *a, **k: None
+    QtWidgets.QHBoxLayout = lambda *_args, **_kwargs: None
     QtWidgets.QListWidget = QListWidget
     QtWidgets.QListWidgetItem = QListWidgetItem
     QtWidgets.QSlider = QSlider
@@ -160,7 +176,11 @@ def _install_stubs():
     QtWidgets.QInputDialog = QInputDialog
     QtWidgets.QFileDialog = QFileDialog
 
-    QtCore = types.SimpleNamespace()
+    QtCore = types.SimpleNamespace(
+        QObject=FakeObject,
+        pyqtSignal=FakeSignal,
+    )
+
     QtCore.Qt = types.SimpleNamespace(
         AlignmentFlag=types.SimpleNamespace(AlignCenter=0),
         Orientation=types.SimpleNamespace(Horizontal=0),
@@ -182,6 +202,8 @@ def _install_stubs():
 
     mc = sys.modules["PyQt6.QtCore"]
     mc.__dict__["Qt"] = QtCore.Qt
+    mc.__dict__["QObject"] = QtCore.QObject
+    mc.__dict__["pyqtSignal"] = QtCore.pyqtSignal
 
     mg = sys.modules["PyQt6.QtGui"]
     mg.__dict__["QPixmap"] = QtGui.QPixmap
@@ -469,7 +491,7 @@ def test_get_local_ip_fallback_and_success(
         types.SimpleNamespace(
             AF_INET=real_socket.AF_INET,
             SOCK_DGRAM=real_socket.SOCK_DGRAM,
-            socket=lambda *args, **kwargs: FakeSock(),
+            socket=lambda *_args, **_kwargs: FakeSock(),  # pyright: ignore[reportUnknownLambdaType]
         ),
     )
 
@@ -492,7 +514,7 @@ def test_get_local_ip_fallback_and_success(
         types.SimpleNamespace(
             AF_INET=real_socket.AF_INET,
             SOCK_DGRAM=real_socket.SOCK_DGRAM,
-            socket=lambda *args, **kwargs: SockErr(),
+            socket=lambda *_args, **_kwargs: SockErr(),  # pyright: ignore[reportUnknownLambdaType]
         ),
     )
 
@@ -525,8 +547,8 @@ def test_get_album_art_from_file_returns_data_and_none(
 
     monkeypatch.setattr(mod, "MP3", FakeMP3)
 
-    app = mod.SonosApp.__new__(mod.SonosApp)
-    data = mod.SonosApp.get_album_art_from_file(app, str(tmp_path / "fake.mp3"))
+    app = mod.ArtworkManager.__new__(mod.ArtworkManager)
+    data = mod.ArtworkManager.get_album_art_from_file(app, str(tmp_path / "fake.mp3"))
     assert data == b"ART"
 
     # now MP3 raises
@@ -534,7 +556,7 @@ def test_get_album_art_from_file_returns_data_and_none(
         raise Exception("bad")
 
     monkeypatch.setattr(mod, "MP3", bad_mp3)
-    data2 = mod.SonosApp.get_album_art_from_file(app, str(tmp_path / "fake.mp3"))
+    data2 = mod.ArtworkManager.get_album_art_from_file(app, str(tmp_path / "fake.mp3"))
     assert data2 is None
 
 
@@ -550,7 +572,7 @@ def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
     mod = _import_module()
 
     # prepare a SonosApp-like object
-    app = mod.SonosApp.__new__(mod.SonosApp)
+    app = mod.ArtworkManager.__new__(mod.ArtworkManager)
     app.current = SimpleNamespace(ip_address="10.0.0.5")
     app.art_cache = {}
     app.current_art_url = None
@@ -564,7 +586,7 @@ def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
         def setPixmap(self, p: Any):
             self.pix = p
 
-    app.album = AlbumLabel()
+    app.album_label = AlbumLabel()
 
     # patch urlopen to return a context manager with .read()
     class FakeResp:
@@ -573,10 +595,10 @@ def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
 
         def __exit__(
             self,
-            exc_type: type | None,
-            exc: BaseException | None,
-            tb: types.TracebackType | None,
-        ) -> bool:
+            _exc_type: type | None,
+            _exc: BaseException | None,
+            _tb: types.TracebackType | None,
+        ) -> typing.Literal[False]:
             return False
 
         def read(self):
@@ -585,7 +607,11 @@ def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
     def fake_urlopen(_req: Any, _timeout: int = 3) -> FakeResp:
         return FakeResp()
 
-    monkeypatch.setattr(mod, "urlopen", fake_urlopen)
+    monkeypatch.setattr(
+        mod,
+        "urlopen",
+        fake_urlopen,
+    )
 
     # ensure PIL.Image.open returns an object with resize and save
     class ImgObj:
@@ -615,9 +641,9 @@ def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(mod, "QPixmap", Pix)
 
     # run load_art with a non-http url (should be prefixed)
-    mod.SonosApp.load_art(app, "/getaa")
+    mod.ArtworkManager.load_art(app, "fake_url", app.current, app.album_label)
     # should have set current_art_url
     assert app.current_art_url is not None
     # second call with same URL should no-op due to cache
     prev = app.current_art_url
-    mod.SonosApp.load_art(app, prev)
+    mod.ArtworkManager.load_art(app, prev, app.current, app.album_label)

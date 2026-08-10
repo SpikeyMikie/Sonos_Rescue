@@ -14,20 +14,26 @@ import time
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from io import BytesIO
 from pathlib import Path
-from typing import BinaryIO, Callable, Protocol, cast, TypeAlias
 from urllib.request import Request, urlopen
 import errno
 from functools import partial
+from typing import (
+    BinaryIO,
+    Callable,
+    Protocol,
+    cast,
+    TypeAlias,
+)
 
 # Third-party libraries
-import soco  # type: ignore[reportMissingTypeStubs]
+import soco  # type: ignore[import-untyped]
 from mutagen.id3 import ID3
 from mutagen.mp3 import MP3
 from PIL import Image
 from PIL.Image import Image as PILImage
 
 # GUI framework
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QObject, Qt, pyqtSignal
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
@@ -302,7 +308,7 @@ class SonosApp(QWidget):
     - caches album artwork.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Initialise the main application window.
 
@@ -315,17 +321,24 @@ class SonosApp(QWidget):
         self.setWindowTitle("Sonos Desktop Controller")
         self.setGeometry(100, 100, 1200, 700)
 
-        # Sonos devices and playback state
-        self.speakers: list[SoCo] = []
         self.current: SoCo | None = None
-
-        self.art_cache: dict[str, QPixmap] = {}
-        self.current_art_url: str | None = None
-
         self.server: LocalMusicServer | None = None
 
+        self.speaker_manager = SpeakerManager()
+        self.artwork_manager = ArtworkManager()
+        self.playback_controller = PlaybackController(
+            get_current_speaker=lambda: self.current
+        )
+
+        self.play_btn: QPushButton
         self.build_ui()
-        self.discover_speakers()
+
+        self.speaker_manager.speakers_discovered.connect(  # pyright: ignore[reportUnknownMemberType]
+            self.display_speakers
+        )
+        self.speaker_manager.speaker_selected.connect(  # pyright: ignore[reportUnknownMemberType]
+            self.display_selected_speaker
+        )
 
         # Start background refresh thread
         self.running = True
@@ -373,24 +386,23 @@ class SonosApp(QWidget):
         center_layout.addWidget(self.album)
         center_layout.addWidget(self.track_info)
 
-        controls = QHBoxLayout()
-
         self.play_btn = QPushButton("Play/Pause")
 
         self.play_btn.clicked.connect(  # pyright: ignore[reportUnknownMemberType]
-            self.play_pause
+            self.handle_play_pause
         )
 
         self.next_btn = QPushButton("Next")
         self.next_btn.clicked.connect(  # pyright: ignore[reportUnknownMemberType]
-            self.next_track
+            self.playback_controller.next_track
         )
 
         self.prev_btn = QPushButton("Prev")
         self.prev_btn.clicked.connect(  # pyright: ignore[reportUnknownMemberType]
-            self.prev_track
+            self.playback_controller.prev_track
         )
 
+        controls = QHBoxLayout()
         controls.addWidget(self.play_btn)
         controls.addWidget(self.prev_btn)
         controls.addWidget(self.next_btn)
@@ -400,7 +412,7 @@ class SonosApp(QWidget):
         self.volume = QSlider(Qt.Orientation.Horizontal)
         self.volume.setRange(0, 100)
         self.volume.valueChanged.connect(  # pyright: ignore[reportUnknownMemberType]
-            self.set_volume
+            self.playback_controller.set_volume
         )
 
         center_layout.addWidget(QLabel("Volume"))
@@ -416,9 +428,8 @@ class SonosApp(QWidget):
 
         self.refresh_btn = QPushButton("Refresh Rooms")
         self.refresh_btn.clicked.connect(  # pyright: ignore[reportUnknownMemberType]
-            self.discover_speakers
+            self.speaker_manager.discover_speakers
         )
-
         right_layout.addWidget(QLabel("Queue"))
         right_layout.addWidget(self.queue)
 
@@ -446,89 +457,47 @@ class SonosApp(QWidget):
         self.setLayout(root)
 
     # ------------------------------------------------------------------
-    # Speaker discovery
+    # Display speakers and selected speaker
     # ------------------------------------------------------------------
 
-    # Discover available Sonos speakers
-    def discover_speakers(self) -> None:
+    def display_speakers(self, speakers: list[SoCo]) -> None:
         """
-        Discover Sonos speakers on the local network.
+        Update the GUI with the list of discovered Sonos speakers.
 
         Clears any existing room cards and rebuilds the speaker list to
         reflect the currently available devices.
         """
-        try:
-            devices = cast(
-                set[SoCo] | None,
-                soco.discover(),  # pyright: ignore[reportUnknownMemberType]
-            )
-            self.speakers = list(devices) if devices else []
+        self.speakers = speakers
 
-            # clear old cards
-            for i in reversed(range(self.rooms_layout.count())):
-                item = self.rooms_layout.itemAt(i)
-                widget = item.widget() if item else None
-                if widget:
-                    widget.setParent(None)
-            # add new cards
-            for s in self.speakers:
-                card = RoomCard(s, self.select_speaker)
-                self.rooms_layout.addWidget(card)
+        # clear old cards
+        for i in reversed(range(self.rooms_layout.count())):
+            item = self.rooms_layout.itemAt(i)
+            widget = item.widget() if item else None
+            if widget:
+                widget.setParent(None)
 
-            # adjust scroll area
-            self.rooms_container_widget.adjustSize()
-            self.rooms_scroll.update()
-            self.rooms_container_widget.update()
+        # add new cards
+        for s in self.speakers:
+            card = RoomCard(s, self.speaker_manager.select_speaker)
+            self.rooms_layout.addWidget(card)
 
-        except Exception as e:
-            QMessageBox.critical(self, "Error", str(e))
+        # adjust scroll area
+        self.rooms_container_widget.adjustSize()
+        self.rooms_scroll.update()
+        self.rooms_container_widget.update()
 
-    def select_speaker(self, speaker: SoCo) -> None:
+    def display_selected_speaker(self, speaker: SoCo) -> None:
         """
-        Make the selected speaker the active playback device.
+        Update the GUI to reflect the currently selected Sonos speaker.
 
-        Args:
-            speaker: The SoCo speaker instance selected by the user.
+        Displays the speaker's name and resets the now playing information.
         """
         self.current = speaker
         self.title.setText(speaker.player_name)
-
-    # ------------------------------------------------------------------
-    # Playback controls
-    # ------------------------------------------------------------------
-
-    def play_pause(self) -> None:
-        """Toggle playback for the selected speaker."""
-        if not self.current:
-            return
-
-        try:
-            state = self.current.get_current_transport_info()["current_transport_state"]
-
-            if state == "PLAYING":
-                self.current.pause()
-                self.play_btn.setText("Pause")
-            else:
-                self.current.play()  # pyright: ignore[reportUnknownMemberType]
-                self.play_btn.setText("Play")
-
-        except Exception as e:
-            print("Play/Pause error:", e)
-
-    def next_track(self) -> None:
-        """Skip to the next track."""
-        if self.current:
-            self.current.next()
-
-    def prev_track(self) -> None:
-        """Return to the previous track."""
-        if self.current:
-            self.current.previous()
-
-    def set_volume(self, v: int) -> None:
-        """Set the volume of the selected speaker."""
-        if self.current:
-            self.current.volume = v
+        self.track_info.setText("")
+        self.album.clear()
+        self.artwork_manager.current_art_url = None
+        self.artwork_manager.art_cache.clear()
 
     # ------------------------------------------------------------------
     # Now playing info
@@ -552,13 +521,17 @@ class SonosApp(QWidget):
             self.track_info.setText(f"{title}\n{artist}\n{album}")
             art: str | None = track.get("album_art")
 
-            if art != self.current_art_url:  # reset cache if art URL changes
-                if self.current_art_url is not None:
-                    self.art_cache.pop(self.current_art_url, None)  # remove old cache
-                self.current_art_url = art  # reset current art URL
+            if (
+                art != self.artwork_manager.current_art_url
+            ):  # reset cache if art URL changes
+                if self.artwork_manager.current_art_url is not None:
+                    self.artwork_manager.art_cache.pop(
+                        self.artwork_manager.current_art_url, None
+                    )  # remove old cache
+                self.artwork_manager.current_art_url = art  # reset current art URL
 
             if art:
-                self.load_art(art)
+                self.artwork_manager.load_art(art, self.current, self.album)
 
             # update queue (lightweight)
             q = cast(list[QueueItemProtocol], self.current.get_queue())
@@ -597,7 +570,7 @@ class SonosApp(QWidget):
             filename = file_path.name
 
             # Extract album art FIRST (safe now)
-            art_data = self.get_album_art_from_file(file_path)
+            art_data = self.artwork_manager.get_album_art_from_file(file_path)
             if art_data:
                 pixmap = QPixmap()
                 pixmap.loadFromData(art_data)
@@ -629,34 +602,6 @@ class SonosApp(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
-    def get_album_art_from_file(self, file_path: str | Path) -> bytes | None:
-        """
-        Extract any embedded front-cover artwork from an MP3 file.
-
-        Returns:
-            bytes | None: The embedded image data, or None if no artwork is
-            available.
-        """
-        file_path = Path(file_path)
-
-        try:
-            audio = MP3(file_path, ID3=ID3)
-
-            tags = cast(dict[object, APICProtocol] | None, audio.tags)  # type: ignore
-
-            if tags is None:
-                return None
-
-            for tag in tags.values():
-                if getattr(tag, "FrameID", None) == "APIC":
-                    if getattr(tag, "type", None) == 3:  # 3 = front cover
-                        return tag.data
-
-        except Exception as e:
-            print("Album art error:", e)
-
-        return None
-
     def get_local_ip(self) -> str:
         """
         Determine the local IPv4 address of this machine.
@@ -673,61 +618,6 @@ class SonosApp(QWidget):
         finally:
             s.close()
         return ip
-
-    # Load and display album art from URL
-    def load_art(self, url: str) -> None:
-        """
-        Download and display album artwork.
-
-        Album artwork is cached in memory to reduce network requests and
-        improve UI responsiveness when the same artwork is displayed again.
-        """
-        speaker = self.current
-        if not speaker:
-            return
-
-        try:
-            if not url.startswith("http"):
-                speaker_ip = cast(str, speaker.ip_address)  # type: ignore
-                url = f"http://{speaker_ip}:1400{url}"
-
-            # If same URL as last time do nothing
-            if url == self.current_art_url:
-                return
-
-            self.current_art_url = url
-
-            # If cached use it
-            if url in self.art_cache:
-                self.album.setPixmap(self.art_cache[url])
-                return
-
-            # Otherwise fetch it
-            req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urlopen(req, timeout=3) as response:
-                image_bytes = response.read()
-
-            image_file: PILImage = Image.open(BytesIO(image_bytes))
-            size: tuple[int, int] = (300, 300)
-            resized_image = resize_image(image_file, size)
-
-            png_buffer = BytesIO()
-            resized_image.save(png_buffer, format="PNG")
-
-            pixmap = QPixmap()
-            pixmap.loadFromData(png_buffer.getvalue())
-
-            # Store in cache
-            self.art_cache[url] = pixmap
-            MAX_CACHE = 20
-
-            if len(self.art_cache) > MAX_CACHE:
-                self.art_cache.pop(next(iter(self.art_cache)))
-
-            self.album.setPixmap(pixmap)
-
-        except Exception as e:
-            print("Album load error:", e)
 
     # ------------------------------------------------------------------
     # Background refresh
@@ -773,6 +663,233 @@ class SonosApp(QWidget):
 
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
+
+    def handle_play_pause(self) -> None:
+        """
+        Handle the Play/Pause button click event.
+
+        Toggles playback on the selected speaker and updates the button label
+        to reflect the current playback state.
+        """
+        if not self.current:
+            QMessageBox.warning(self, "No speaker", "Select a room first")
+            return
+
+        self.playback_controller.play_pause()
+
+        try:
+            state = self.current.get_current_transport_info()["current_transport_state"]
+            if state == "PLAYING":
+                self.play_btn.setText("Pause")
+            else:
+                self.play_btn.setText("Play")
+        except Exception:
+            self.play_btn.setText("Play/Pause")
+
+
+class PlaybackController:
+    """
+    Handles playback control for the selected Sonos speaker.
+
+    This class provides methods to play, pause, skip tracks, and adjust
+    volume on the currently selected speaker. It encapsulates the logic
+    for interacting with the SoCo library and ensures that commands are
+    only sent when a speaker is selected.
+    """
+
+    def __init__(self, get_current_speaker: Callable[[], SoCo | None]) -> None:
+        """
+        Initialise the playback controller.
+
+        Args:
+            get_current_speaker:
+                A callable that returns the currently selected SoCo speaker,
+                or None if no speaker is selected.
+        """
+        self.get_current_speaker = get_current_speaker
+
+    def play_pause(self) -> None:
+        """Toggle playback for the selected speaker."""
+        current = self.get_current_speaker()
+        if not current:
+            return
+
+        try:
+            state = current.get_current_transport_info()["current_transport_state"]
+            if state == "PLAYING":
+                current.pause()
+            else:
+                current.play()  # pyright: ignore[reportUnknownMemberType]
+
+        except Exception as e:
+            print("Play/Pause error:", e)
+
+    def next_track(self) -> None:
+        """Skip to the next track."""
+        current = self.get_current_speaker()
+        if current:
+            current.next()
+
+    def prev_track(self) -> None:
+        """Return to the previous track."""
+        current = self.get_current_speaker()
+        if current:
+            current.previous()
+
+    def set_volume(self, v: int) -> None:
+        """Set the volume of the selected speaker."""
+        current = self.get_current_speaker()
+        if current:
+            current.volume = v
+
+    # ------------------------------------------------------------------
+    # Playback controls
+    # ------------------------------------------------------------------
+
+
+class SpeakerManager(QObject):
+    """
+    Manages the discovery and selection of Sonos speakers.
+
+    This class encapsulates the logic for discovering available Sonos devices
+    on the local network, maintaining a list of discovered speakers, and
+    allowing the user to select a speaker for control.
+    """
+
+    speakers_discovered = pyqtSignal(list)
+    speaker_selected = pyqtSignal(object)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.speakers: list[SoCo] = []
+        self.current: SoCo | None = None
+
+    def discover_speakers(self) -> None:
+        """
+        Discover Sonos speakers on the local network.
+
+        Clears any existing room cards and rebuilds the speaker list to
+        reflect the currently available devices.
+        """
+        try:
+            devices = cast(
+                set[SoCo] | None,
+                soco.discover(),  # pyright: ignore[reportUnknownMemberType]
+            )
+            self.speakers = list(devices) if devices else []
+            self.speakers_discovered.emit(self.speakers)
+
+        # Note: changed exception back to a simple print for now, will decide  if signal needed later.
+        # Reason: QMessageBox.critical() expects a QWidget as its parent, whereas self is now a
+        # SpeakerManager, which is a QObject, not a QWidget.
+        except Exception as e:
+            print("Speaker discovery error:", e)
+
+    def select_speaker(self, speaker: SoCo) -> None:
+        """
+        Make the selected speaker the active playback device.
+
+        Args:
+            speaker: The SoCo speaker instance selected by the user.
+        """
+        self.current = speaker
+        self.speaker_selected.emit(speaker)
+
+
+class ArtworkManager:
+    """
+    Manages the retrieval and caching of album artwork.
+
+    This class handles downloading album artwork from Sonos devices,
+    resizing images for display, and caching them in memory to improve
+    performance and reduce network requests.
+    """
+
+    def __init__(self) -> None:
+        self.art_cache: dict[str, QPixmap] = {}
+        self.current_art_url: str | None = None
+
+    def get_album_art_from_file(self, file_path: str | Path) -> bytes | None:
+        """
+        Extract any embedded front-cover artwork from an MP3 file.
+
+        Returns:
+            bytes | None: The embedded image data, or None if no artwork is
+            available.
+        """
+        file_path = Path(file_path)
+
+        try:
+            audio = MP3(file_path, ID3=ID3)
+
+            tags: dict[object, APICProtocol] | None = cast(
+                dict[object, APICProtocol] | None,
+                audio.tags,  # pyright: ignore[reportUnknownMemberType]
+            )
+
+            if tags is None:
+                return None
+
+            for tag in tags.values():
+                if getattr(tag, "FrameID", None) == "APIC":
+                    if getattr(tag, "type", None) == 3:  # 3 = front cover
+                        return tag.data
+
+        except Exception as e:
+            print("Album art error:", e)
+
+        return None
+
+    # Load and display album art from URL
+    def load_art(self, url: str, speaker: SoCo, album_label: QLabel) -> None:
+        """
+        Download and display album artwork.
+
+        Album artwork is cached in memory to reduce network requests and
+        improve UI responsiveness when the same artwork is displayed again.
+        """
+        try:
+            if not url.startswith("http"):
+                speaker_ip = cast(str, speaker.ip_address)  # type: ignore
+                url = f"http://{speaker_ip}:1400{url}"
+
+            # If same URL as last time do nothing
+            if url == self.current_art_url:
+                return
+
+            self.current_art_url = url
+
+            # If cached use it
+            if url in self.art_cache:
+                album_label.setPixmap(self.art_cache[url])
+                return
+
+            # Otherwise fetch it
+            req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urlopen(req, timeout=3) as response:
+                image_bytes = response.read()
+
+            image_file: PILImage = Image.open(BytesIO(image_bytes))
+            size: tuple[int, int] = (300, 300)
+            resized_image = resize_image(image_file, size)
+
+            png_buffer = BytesIO()
+            resized_image.save(png_buffer, format="PNG")
+
+            pixmap = QPixmap()
+            pixmap.loadFromData(png_buffer.getvalue())
+
+            # Store in cache
+            self.art_cache[url] = pixmap
+            MAX_CACHE = 20
+
+            if len(self.art_cache) > MAX_CACHE:
+                self.art_cache.pop(next(iter(self.art_cache)))
+
+            album_label.setPixmap(pixmap)
+
+        except Exception as e:
+            print("Album load error:", e)
 
 
 def resize_image(image: PILImage, size: tuple[int, int]) -> PILImage:
