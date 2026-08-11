@@ -8,9 +8,15 @@ import types
 from types import SimpleNamespace
 import importlib
 from pathlib import Path
-from typing import Any
 import typing
+from typing import Any
+
+# from numpy import mod
 import pytest
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+SRC_DIR = PROJECT_ROOT / "src"
+sys.path.insert(0, str(SRC_DIR))
 
 
 def _install_stubs():
@@ -265,11 +271,40 @@ def _install_stubs():
 def _import_module():
     # ensure stubs present before importing sonos_rescue
     _install_stubs()
-    if "sonos_rescue" in sys.modules:
-        importlib.reload(sys.modules["sonos_rescue"])
+
+    module_name = "sonos_rescue.sonos_rescue"
+
+    if module_name in sys.modules:
+        importlib.reload(sys.modules[module_name])
     else:
-        importlib.import_module("sonos_rescue")
-    return sys.modules["sonos_rescue"]
+        importlib.import_module(module_name)
+
+    return sys.modules[module_name]
+
+
+def import_local_music_server():
+    _install_stubs()
+
+    module_name = "sonos_rescue.services.local_music_server"
+
+    if module_name in sys.modules:
+        importlib.reload(sys.modules[module_name])
+    else:
+        importlib.import_module(module_name)
+
+    return sys.modules[module_name]
+
+
+def _import_network_module():
+    """Import the network utility module with test doubles in place."""
+    module_name = "sonos_rescue.utils.network"
+
+    if module_name in sys.modules:
+        importlib.reload(sys.modules[module_name])
+    else:
+        importlib.import_module(module_name)
+
+    return sys.modules[module_name]
 
 
 def test_quiet_copyfile_handles_errors():
@@ -282,7 +317,8 @@ def test_quiet_copyfile_handles_errors():
     propagate out of copyfile.
     """
 
-    mod = _import_module()
+    mod = import_local_music_server()
+
     handler = mod.QuietHTTPRequestHandler.__new__(mod.QuietHTTPRequestHandler)
 
     class BadOutput:
@@ -422,7 +458,7 @@ def test_local_music_server_all_ports_occupied(
     Args:
         tmp_path (Path): Temporary directory used as the server's served folder.
     """
-    mod = _import_module()
+    mod = import_local_music_server()
     monkeypatch.setattr(mod, "HTTPServer", fake_http_server)
     server = mod.LocalMusicServer(folder=tmp_path, port=8123)
 
@@ -473,7 +509,8 @@ def test_room_card_select_calls_on_select():
 def test_get_local_ip_fallback_and_success(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    mod = _import_module()
+    # mod = _import_module()
+    network_mod = importlib.import_module("sonos_rescue.utils.network")
 
     class FakeSock:
         def connect(self, addr: tuple[str, int]) -> None:
@@ -485,8 +522,14 @@ def test_get_local_ip_fallback_and_success(
         def close(self):
             pass
 
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            self.close()
+
     monkeypatch.setattr(
-        mod,
+        network_mod,
         "socket",
         types.SimpleNamespace(
             AF_INET=real_socket.AF_INET,
@@ -495,12 +538,12 @@ def test_get_local_ip_fallback_and_success(
         ),
     )
 
-    ip = mod.SonosApp.get_local_ip(mod.SonosApp.__new__(mod.SonosApp))
+    ip = network_mod.get_local_ip()
     assert ip == "192.0.2.1"
 
     class SockErr:
         def connect(self, addr: tuple[str, int]) -> None:
-            raise Exception()
+            raise OSError("network unreachable")
 
         def getsockname(self):
             return ("0.0.0.0", 0)
@@ -508,8 +551,14 @@ def test_get_local_ip_fallback_and_success(
         def close(self):
             pass
 
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            self.close()
+
     monkeypatch.setattr(
-        mod,
+        network_mod,
         "socket",
         types.SimpleNamespace(
             AF_INET=real_socket.AF_INET,
@@ -518,7 +567,7 @@ def test_get_local_ip_fallback_and_success(
         ),
     )
 
-    ip2 = mod.SonosApp.get_local_ip(mod.SonosApp.__new__(mod.SonosApp))
+    ip2 = network_mod.get_local_ip()
     assert ip2 == "127.0.0.1"
 
 
@@ -534,8 +583,9 @@ def test_get_album_art_from_file_returns_data_and_none(
     """
 
     mod = _import_module()
-    # mock MP3 to return tags containing an APIC-like object
+    artwork_mod = importlib.import_module("sonos_rescue.managers.artwork_manager")
 
+    # mock MP3 to return tags containing an APIC-like object
     class Tag:
         FrameID = "APIC"
         type = 3
@@ -545,7 +595,7 @@ def test_get_album_art_from_file_returns_data_and_none(
         def __init__(self, path: str, ID3: object = None):
             self.tags = {"APIC": Tag()}
 
-    monkeypatch.setattr(mod, "MP3", FakeMP3)
+    monkeypatch.setattr(artwork_mod, "MP3", FakeMP3)
 
     app = mod.ArtworkManager.__new__(mod.ArtworkManager)
     data = mod.ArtworkManager.get_album_art_from_file(app, str(tmp_path / "fake.mp3"))
@@ -555,7 +605,7 @@ def test_get_album_art_from_file_returns_data_and_none(
     def bad_mp3(*args: object, **kwargs: object) -> None:
         raise Exception("bad")
 
-    monkeypatch.setattr(mod, "MP3", bad_mp3)
+    monkeypatch.setattr(artwork_mod, "MP3", bad_mp3)
     data2 = mod.ArtworkManager.get_album_art_from_file(app, str(tmp_path / "fake.mp3"))
     assert data2 is None
 
@@ -570,6 +620,7 @@ def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
     """
 
     mod = _import_module()
+    artwork_mod = importlib.import_module("sonos_rescue.managers.artwork_manager")
 
     # prepare a SonosApp-like object
     app = mod.ArtworkManager.__new__(mod.ArtworkManager)
@@ -608,7 +659,7 @@ def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
         return FakeResp()
 
     monkeypatch.setattr(
-        mod,
+        artwork_mod,
         "urlopen",
         fake_urlopen,
     )
@@ -625,7 +676,7 @@ def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
         return ImgObj()
 
     monkeypatch.setattr(
-        mod,
+        artwork_mod,
         "Image",
         types.SimpleNamespace(open=fake_image_open),
     )
@@ -638,7 +689,7 @@ def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
         def loadFromData(self, d: bytes):
             self.data = d
 
-    monkeypatch.setattr(mod, "QPixmap", Pix)
+    monkeypatch.setattr(artwork_mod, "QPixmap", Pix)
 
     # run load_art with a non-http url (should be prefixed)
     mod.ArtworkManager.load_art(app, "fake_url", app.current, app.album_label)
