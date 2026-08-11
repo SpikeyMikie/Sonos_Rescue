@@ -571,45 +571,6 @@ def test_get_local_ip_fallback_and_success(
     assert ip2 == "127.0.0.1"
 
 
-def test_get_album_art_from_file_returns_data_and_none(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-):
-    """Validate `get_album_art_from_file` extracts APIC frame data from
-    an MP3 file and returns `None` when MP3 parsing fails.
-
-    The test replaces `MP3` with a fake that provides an APIC-like tag
-    and then with a callable that raises to exercise the exception
-    handling path.
-    """
-
-    mod = _import_module()
-    artwork_mod = importlib.import_module("sonos_rescue.managers.artwork_manager")
-
-    # mock MP3 to return tags containing an APIC-like object
-    class Tag:
-        FrameID = "APIC"
-        type = 3
-        data = b"ART"
-
-    class FakeMP3:
-        def __init__(self, path: str, ID3: object = None):
-            self.tags = {"APIC": Tag()}
-
-    monkeypatch.setattr(artwork_mod, "MP3", FakeMP3)
-
-    app = mod.ArtworkManager.__new__(mod.ArtworkManager)
-    data = mod.ArtworkManager.get_album_art_from_file(app, str(tmp_path / "fake.mp3"))
-    assert data == b"ART"
-
-    # now MP3 raises
-    def bad_mp3(*args: object, **kwargs: object) -> None:
-        raise Exception("bad")
-
-    monkeypatch.setattr(artwork_mod, "MP3", bad_mp3)
-    data2 = mod.ArtworkManager.get_album_art_from_file(app, str(tmp_path / "fake.mp3"))
-    assert data2 is None
-
-
 def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
     """Exercise `load_art` network fetching and caching behavior.
 

@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sonos-rescue"
+version = "0.1.0"
+description = "A desktop controller for Sonos speakers"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "COPYING.txt" }
+
+dependencies = [
+    "mutagen>=1.47",
+    "Pillow>=12.0",
+    "PyQt6>=6.11",
+    "soco>=0.31",
+]
+
+[project.scripts]
+sonos-rescue = "sonos_rescue.sonos_rescue:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
