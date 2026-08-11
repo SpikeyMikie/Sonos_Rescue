@@ -6,7 +6,6 @@ and starts the event loop.
 """
 
 # Standard library
-import socket
 import sys
 import threading
 import time
@@ -17,7 +16,6 @@ from typing import (
 )
 
 # Type checking exceptions
-import soco  # type: ignore[import-untyped]
 from soco import SoCo  # type: ignore[import-untyped]
 
 # GUI framework
@@ -35,6 +33,7 @@ from PyQt6.QtWidgets import (
     QSlider,
     QVBoxLayout,
     QWidget,
+    QFileDialog,
 )
 
 # internal app imports
@@ -43,9 +42,9 @@ from .managers.speaker_manager import SpeakerManager
 from .managers.playback_controller import PlaybackController
 from .managers.artwork_manager import ArtworkManager
 from .ui.room_card import RoomCard
+from .utils.network import get_local_ip
 
 
-# custom class for tbc
 class QueueItemProtocol(Protocol):
     """
     Defines the minimum interface required for Sonos queue items.
@@ -307,9 +306,6 @@ class SonosApp(QWidget):
         if not self.current:
             return
 
-        # moved import here to avoid unnecessary dependency if not using this feature
-        from PyQt6.QtWidgets import QFileDialog
-
         file_path_str, _ = QFileDialog.getOpenFileName(
             self, "Select Music File", "", "Audio Files (*.mp3 *.wav *.m4a)"
         )
@@ -345,7 +341,7 @@ class SonosApp(QWidget):
             # Build URL
             from urllib.parse import quote
 
-            ip = self.get_local_ip()
+            ip = get_local_ip()
             url = f"http://{ip}:{self.server.port}/{quote(filename)}"
 
             print("Playing:", url)
@@ -355,23 +351,6 @@ class SonosApp(QWidget):
 
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
-
-    def get_local_ip(self) -> str:
-        """
-        Determine the local IPv4 address of this machine.
-
-        A UDP socket is used only to discover the preferred network interface.
-        No data is actually sent to the remote address (google).
-        """
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
-        except:
-            ip = "127.0.0.1"
-        finally:
-            s.close()
-        return ip
 
     # ------------------------------------------------------------------
     # Background refresh

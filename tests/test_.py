@@ -16,15 +16,7 @@ import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = PROJECT_ROOT / "src"
-
 sys.path.insert(0, str(SRC_DIR))
-
-# print("PROJECT_ROOT:", PROJECT_ROOT)
-# print("SRC_DIR:", SRC_DIR)
-# print("sys.path:", sys.path[:3])
-
-
-# from sonos_rescue.managers.artwork_manager import ArtworkManager
 
 
 def _install_stubs():
@@ -303,6 +295,18 @@ def import_local_music_server():
     return sys.modules[module_name]
 
 
+def _import_network_module():
+    """Import the network utility module with test doubles in place."""
+    module_name = "sonos_rescue.utils.network"
+
+    if module_name in sys.modules:
+        importlib.reload(sys.modules[module_name])
+    else:
+        importlib.import_module(module_name)
+
+    return sys.modules[module_name]
+
+
 def test_quiet_copyfile_handles_errors():
     """Verify QuietHTTPRequestHandler.copyfile swallows broken-pipe and
     connection-reset errors without raising so the server stays stable.
@@ -505,7 +509,8 @@ def test_room_card_select_calls_on_select():
 def test_get_local_ip_fallback_and_success(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    mod = _import_module()
+    # mod = _import_module()
+    network_mod = importlib.import_module("sonos_rescue.utils.network")
 
     class FakeSock:
         def connect(self, addr: tuple[str, int]) -> None:
@@ -518,7 +523,7 @@ def test_get_local_ip_fallback_and_success(
             pass
 
     monkeypatch.setattr(
-        mod,
+        network_mod,
         "socket",
         types.SimpleNamespace(
             AF_INET=real_socket.AF_INET,
@@ -527,7 +532,7 @@ def test_get_local_ip_fallback_and_success(
         ),
     )
 
-    ip = mod.SonosApp.get_local_ip(mod.SonosApp.__new__(mod.SonosApp))
+    ip = network_mod.get_local_ip()
     assert ip == "192.0.2.1"
 
     class SockErr:
@@ -541,7 +546,7 @@ def test_get_local_ip_fallback_and_success(
             pass
 
     monkeypatch.setattr(
-        mod,
+        network_mod,
         "socket",
         types.SimpleNamespace(
             AF_INET=real_socket.AF_INET,
@@ -550,7 +555,7 @@ def test_get_local_ip_fallback_and_success(
         ),
     )
 
-    ip2 = mod.SonosApp.get_local_ip(mod.SonosApp.__new__(mod.SonosApp))
+    ip2 = network_mod.get_local_ip()
     assert ip2 == "127.0.0.1"
 
 
