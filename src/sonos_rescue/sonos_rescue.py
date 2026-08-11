@@ -292,8 +292,8 @@ class SonosApp(QWidget):
 
             for item in q:
                 self.queue.addItem(item.title)
-        except Exception:
-            pass
+        except Exception as e:
+            print("Now playing update error:", e)
 
     def play_local_file(self) -> None:
         """
@@ -365,8 +365,8 @@ class SonosApp(QWidget):
         while self.running:
             try:
                 self.update_now_playing()
-            except:
-                pass
+            except Exception as e:
+                print("Refresh error:", e)
             time.sleep(2)
 
     def add_to_queue(self) -> None:

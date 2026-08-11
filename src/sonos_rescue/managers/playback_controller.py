@@ -42,14 +42,22 @@ class PlaybackController:
     def next_track(self) -> None:
         """Skip to the next track."""
         current = self.get_current_speaker()
-        if current:
+        if not current:
+            return
+        try:
             current.next()
+        except Exception as e:
+            print("Next track error:", e)
 
     def prev_track(self) -> None:
         """Return to the previous track."""
         current = self.get_current_speaker()
-        if current:
+        if not current:
+            return
+        try:
             current.previous()
+        except Exception as e:
+            print("Prev track error:", e)
 
     def set_volume(self, v: int) -> None:
         """Set the volume of the selected speaker."""

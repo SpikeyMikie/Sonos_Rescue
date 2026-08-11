@@ -522,6 +522,12 @@ def test_get_local_ip_fallback_and_success(
         def close(self):
             pass
 
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            self.close()
+
     monkeypatch.setattr(
         network_mod,
         "socket",
@@ -537,13 +543,19 @@ def test_get_local_ip_fallback_and_success(
 
     class SockErr:
         def connect(self, addr: tuple[str, int]) -> None:
-            raise Exception()
+            raise OSError("network unreachable")
 
         def getsockname(self):
             return ("0.0.0.0", 0)
 
         def close(self):
             pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            self.close()
 
     monkeypatch.setattr(
         network_mod,
