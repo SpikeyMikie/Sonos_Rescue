@@ -10,13 +10,21 @@ import importlib
 from pathlib import Path
 import typing
 from typing import Any
-from numpy import mod
+
+# from numpy import mod
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = PROJECT_ROOT / "src"
 
 sys.path.insert(0, str(SRC_DIR))
+
+# print("PROJECT_ROOT:", PROJECT_ROOT)
+# print("SRC_DIR:", SRC_DIR)
+# print("sys.path:", sys.path[:3])
+
+
+# from sonos_rescue.managers.artwork_manager import ArtworkManager
 
 
 def _install_stubs():
@@ -558,8 +566,9 @@ def test_get_album_art_from_file_returns_data_and_none(
     """
 
     mod = _import_module()
-    # mock MP3 to return tags containing an APIC-like object
+    artwork_mod = importlib.import_module("sonos_rescue.managers.artwork_manager")
 
+    # mock MP3 to return tags containing an APIC-like object
     class Tag:
         FrameID = "APIC"
         type = 3
@@ -569,7 +578,7 @@ def test_get_album_art_from_file_returns_data_and_none(
         def __init__(self, path: str, ID3: object = None):
             self.tags = {"APIC": Tag()}
 
-    monkeypatch.setattr(mod, "MP3", FakeMP3)
+    monkeypatch.setattr(artwork_mod, "MP3", FakeMP3)
 
     app = mod.ArtworkManager.__new__(mod.ArtworkManager)
     data = mod.ArtworkManager.get_album_art_from_file(app, str(tmp_path / "fake.mp3"))
@@ -579,7 +588,7 @@ def test_get_album_art_from_file_returns_data_and_none(
     def bad_mp3(*args: object, **kwargs: object) -> None:
         raise Exception("bad")
 
-    monkeypatch.setattr(mod, "MP3", bad_mp3)
+    monkeypatch.setattr(artwork_mod, "MP3", bad_mp3)
     data2 = mod.ArtworkManager.get_album_art_from_file(app, str(tmp_path / "fake.mp3"))
     assert data2 is None
 
@@ -594,6 +603,7 @@ def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
     """
 
     mod = _import_module()
+    artwork_mod = importlib.import_module("sonos_rescue.managers.artwork_manager")
 
     # prepare a SonosApp-like object
     app = mod.ArtworkManager.__new__(mod.ArtworkManager)
@@ -632,7 +642,7 @@ def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
         return FakeResp()
 
     monkeypatch.setattr(
-        mod,
+        artwork_mod,
         "urlopen",
         fake_urlopen,
     )
@@ -649,7 +659,7 @@ def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
         return ImgObj()
 
     monkeypatch.setattr(
-        mod,
+        artwork_mod,
         "Image",
         types.SimpleNamespace(open=fake_image_open),
     )
@@ -662,7 +672,7 @@ def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
         def loadFromData(self, d: bytes):
             self.data = d
 
-    monkeypatch.setattr(mod, "QPixmap", Pix)
+    monkeypatch.setattr(artwork_mod, "QPixmap", Pix)
 
     # run load_art with a non-http url (should be prefixed)
     mod.ArtworkManager.load_art(app, "fake_url", app.current, app.album_label)
