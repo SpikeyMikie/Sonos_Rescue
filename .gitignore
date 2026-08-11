@@ -5,6 +5,7 @@ __pycache__/
 .env
 secrets.txt
 project-notes.md
+*.egg-info/
 
 # Testing
 .pytest_cache/

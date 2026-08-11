@@ -420,8 +420,18 @@ class SonosApp(QWidget):
             self.play_btn.setText("Play/Pause")
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """
+    Entry point for the Sonos Rescue application.
+
+    Creates the QApplication instance, initialises the main window,
+    and starts the event loop.
+    """
     app = QApplication(sys.argv)
     window = SonosApp()
     window.show()
     sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
