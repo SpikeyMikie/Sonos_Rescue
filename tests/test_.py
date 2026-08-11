@@ -8,9 +8,15 @@ import types
 from types import SimpleNamespace
 import importlib
 from pathlib import Path
-from typing import Any
 import typing
+from typing import Any
+from numpy import mod
 import pytest
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+SRC_DIR = PROJECT_ROOT / "src"
+
+sys.path.insert(0, str(SRC_DIR))
 
 
 def _install_stubs():
@@ -265,11 +271,28 @@ def _install_stubs():
 def _import_module():
     # ensure stubs present before importing sonos_rescue
     _install_stubs()
-    if "sonos_rescue" in sys.modules:
-        importlib.reload(sys.modules["sonos_rescue"])
+
+    module_name = "sonos_rescue.sonos_rescue"
+
+    if module_name in sys.modules:
+        importlib.reload(sys.modules[module_name])
     else:
-        importlib.import_module("sonos_rescue")
-    return sys.modules["sonos_rescue"]
+        importlib.import_module(module_name)
+
+    return sys.modules[module_name]
+
+
+def import_local_music_server():
+    _install_stubs()
+
+    module_name = "sonos_rescue.services.local_music_server"
+
+    if module_name in sys.modules:
+        importlib.reload(sys.modules[module_name])
+    else:
+        importlib.import_module(module_name)
+
+    return sys.modules[module_name]
 
 
 def test_quiet_copyfile_handles_errors():
@@ -282,7 +305,8 @@ def test_quiet_copyfile_handles_errors():
     propagate out of copyfile.
     """
 
-    mod = _import_module()
+    mod = import_local_music_server()
+
     handler = mod.QuietHTTPRequestHandler.__new__(mod.QuietHTTPRequestHandler)
 
     class BadOutput:
@@ -422,7 +446,7 @@ def test_local_music_server_all_ports_occupied(
     Args:
         tmp_path (Path): Temporary directory used as the server's served folder.
     """
-    mod = _import_module()
+    mod = import_local_music_server()
     monkeypatch.setattr(mod, "HTTPServer", fake_http_server)
     server = mod.LocalMusicServer(folder=tmp_path, port=8123)
 
