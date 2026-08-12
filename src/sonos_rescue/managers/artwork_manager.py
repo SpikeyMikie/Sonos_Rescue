@@ -1,18 +1,16 @@
+from __future__ import annotations
 from io import BytesIO
 from pathlib import Path
-from typing import cast, Protocol
-from urllib.request import Request, urlopen
-
-# 3rd party imports
+from typing import cast
+from PIL import Image
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3
-from PIL import Image
+from mutagen.id3._frames import APIC as APICProtocol
 from PIL.Image import Image as PILImage
-from soco import SoCo  # type: ignore[import-untyped]
-
-# gui imports
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QLabel
+from soco import SoCo  # type: ignore[import-untyped]
+from urllib.request import Request, urlopen
 
 
 class ArtworkManager:
@@ -53,7 +51,7 @@ class ArtworkManager:
             for tag in tags.values():
                 if getattr(tag, "FrameID", None) == "APIC":
                     if getattr(tag, "type", None) == 3:  # 3 = front cover
-                        return tag.data
+                        return getattr(tag, "data", None)
 
         except Exception as e:
             print("Album art error:", e)
@@ -69,9 +67,15 @@ class ArtworkManager:
         improve UI responsiveness when the same artwork is displayed again.
         """
         try:
+            if not url or url == "None":
+                return
+
             if not url.startswith("http"):
-                speaker_ip = cast(str, speaker.ip_address)  # type: ignore
+                speaker_ip = cast(str, speaker.ip_address)
                 url = f"http://{speaker_ip}:1400{url}"
+
+            if not url.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".webp")):
+                return
 
             self.current_art_url = url
 
@@ -119,18 +123,4 @@ def resize_image(image: PILImage, size: tuple[int, int]) -> PILImage:
     Kept separate from the main album-loading function to isolate
     image manipulation logic.
     """
-
     return image.resize(size)  # pyright: ignore[reportUnknownMemberType]
-
-
-class APICProtocol(Protocol):
-    """
-    Defines the attributes required from Mutagen album artwork frames.
-
-    Used to extract embedded cover art from MP3 files while avoiding
-    dependency on Mutagen's incomplete type information.
-    """
-
-    FrameID: str
-    type: int
-    data: bytes
