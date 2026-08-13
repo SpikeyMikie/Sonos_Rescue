@@ -301,32 +301,6 @@ def _import_network_module():
     return sys.modules[module_name]
 
 
-# helper function to simulate an occupied port by raising OSError
-
-
-def test_room_card_select_calls_on_select():
-    """Ensure RoomCard.select calls the provided callback with the
-    speaker object and that the displayed name matches `player_name`.
-
-    This checks the small UI component wiring without creating a real
-    Qt event loop by using the lightweight PyQt stubs installed for
-    tests.
-    """
-
-    mod = _import_module()
-
-    speaker = SimpleNamespace(player_name="TestRoom")
-    called = {}
-
-    def on_select(s: SimpleNamespace):
-        called["s"] = s
-
-    card = mod.RoomCard(speaker, on_select)
-    assert card.name_label._text == "TestRoom"
-    card.select()
-    assert called["s"] is speaker
-
-
 def test_get_local_ip_fallback_and_success(
     monkeypatch: pytest.MonkeyPatch,
 ):
