@@ -5,6 +5,7 @@ from typing import Any, cast
 import types
 import typing
 
+from sonos_rescue.database.database import ArtworkDatabase
 import sonos_rescue.managers.artwork_manager as artwork_mod
 
 
@@ -46,46 +47,65 @@ def test_get_album_art_from_file_returns_data_and_none(
     assert data2 is None
 
 
-def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
-    """Exercise `load_art` network fetching and caching behavior.
-
-    This creates a minimal `SonosApp`-like object with `current` set,
-    patches `urlopen`, `Image.open`, and `QPixmap` to deterministic
-    fakes, then calls `load_art` to ensure the art URL is normalized,
-    fetched, stored in `art_cache`, and reused on subsequent calls.
+def test_load_art_uses_memory_cache(monkeypatch: pytest.MonkeyPatch):
     """
-
+    Test that `load_art` uses the in-memory cache when the artwork URL is already cached.
+    This test creates a minimal `SonosApp`-like object with `current` set,
+    and verifies that the cached artwork is used instead of fetching it again.
+    """
     mod = artwork_mod
 
-    # prepare a SonosApp-like object
-    speaker: Any = SimpleNamespace(ip_address="10.0.0.5")
-    app = cast(Any, mod.ArtworkManager())
-    app.current = speaker
-    app.current_art_url = None
-    app.art_cache = {}
-    app.displayed_art_url = None
+    manager = mod.ArtworkManager(ArtworkDatabase(":memory:"))
+    manager.art_cache = {"http://fake-url.test/album.jpg": "cached_pixmap"}
 
-    # app: Any = mod.ArtworkManager.__new__(mod.ArtworkManager)
-    # speaker: Any = cast(Any, SimpleNamespace(ip_address="10.0.0.5"))
-    # setattr(app, "current", speaker)
-    # setattr(app, "current_art_url", None)
-    # setattr(app, "art_cache", {})
-    # setattr(app, "displayed_art_url", None)
+    assert "http://fake-url.test/album.jpg" in manager.art_cache
+
+    assert manager.art_cache["http://fake-url.test/album.jpg"] == "cached_pixmap"
+
+
+def test_load_art_uses_database_cache(monkeypatch: pytest.MonkeyPatch):
+    """`load_art` should populate the in-memory cache from the database cache."""
+    mod = artwork_mod
+    manager = mod.ArtworkManager(ArtworkDatabase(":memory:"))
+    url = "http://fake-url.test/album.jpg"
+    manager.database.insert_artwork_data(url, b"cached_bytes")
+
+    class FakePixmap:
+        def __init__(self):
+            self.data = None
+
+        def loadFromData(self, d: bytes):
+            self.data = d
+
+    monkeypatch.setattr(mod, "QPixmap", FakePixmap)
 
     class AlbumLabel:
-        """Minimal album label stub for testing."""
+        def __init__(self) -> None:
+            self.pixmap: Any | None = None
 
-        def __init__(self):
-            self.pix: Any | None = None
+        def setPixmap(self, pixmap: Any) -> None:
+            self.pixmap = pixmap
 
-        def setPixmap(self, p: Any):
-            self.pix = p
+    album_label = AlbumLabel()
 
-    setattr(app, "album_label", AlbumLabel())
+    manager.load_art(
+        url,
+        cast(Any, SimpleNamespace(ip_address="10.0.0.5")),
+        cast(Any, album_label),
+    )
 
-    app.album_label = AlbumLabel()
+    assert manager.displayed_art_url == url
+    assert url in manager.art_cache
+    assert manager.database.get_artwork_data(url) == b"cached_bytes"
+    assert album_label.pixmap is manager.art_cache[url]
 
-    # patch urlopen to return a context manager with .read()
+
+def test_load_art_downloads_and_caches_artwork(monkeypatch: pytest.MonkeyPatch):
+    """`load_art` should fetch, resize, cache, and persist downloaded artwork."""
+    mod = artwork_mod
+    manager = mod.ArtworkManager(ArtworkDatabase(":memory:"))
+    url = "http://fake-url.test/album.jpg"
+
     class FakeResp:
         def __enter__(self):
             return self
@@ -99,50 +119,86 @@ def test_load_art_fetch_and_cache(monkeypatch: pytest.MonkeyPatch):
             return False
 
         def read(self):
-            return b"IMAGEBYTES"
+            return b"downloaded_image_data"
 
-    def fake_urlopen(_req: Any, _timeout: int = 3) -> FakeResp:
+    def fake_urlopen(
+        _req: Any, *args: object, timeout: int = 3, **kwargs: object
+    ) -> FakeResp:
         return FakeResp()
 
-    monkeypatch.setattr(
-        artwork_mod,
-        "urlopen",
-        fake_urlopen,
-    )
+    monkeypatch.setattr(mod, "urlopen", fake_urlopen)
 
-    # ensure PIL.Image.open returns an object with resize and save
-    class ImgObj:
+    class FakeImage:
         def resize(self, size: tuple[int, int]):
-            return self
+            assert size == (300, 300)
+            return FakeResizedImage()
 
-        def save(self, fp: Any, format: str | None = None):
-            fp.write(b"PNG")
+    class FakeResizedImage:
+        def save(self, buffer: Any, format: str) -> None:
+            buffer.write(b"png-bytes")
 
-    def fake_image_open(_b: Any) -> ImgObj:
-        return ImgObj()
+    def fake_image_open(_data: Any) -> FakeImage:
+        return FakeImage()
 
-    monkeypatch.setattr(
-        artwork_mod,
-        "Image",
-        types.SimpleNamespace(open=fake_image_open),
-    )
+    monkeypatch.setattr(mod.Image, "open", fake_image_open)
 
-    # simple QPixmap substitute
-    class Pix:
+    class FakePixmap:
         def __init__(self):
             self.data = None
 
         def loadFromData(self, d: bytes):
             self.data = d
 
-    monkeypatch.setattr(artwork_mod, "QPixmap", Pix)
+    monkeypatch.setattr(mod, "QPixmap", FakePixmap)
 
-    # run load_art with a non-http url (should be prefixed)
-    mod.ArtworkManager.load_art(
-        app, "http://fake-url.test/album.jpg", speaker, cast(Any, app.album_label)
+    class AlbumLabel:
+        def __init__(self) -> None:
+            self.pixmap: Any | None = None
+
+        def setPixmap(self, pixmap: Any) -> None:
+            self.pixmap = pixmap
+
+    album_label = AlbumLabel()
+
+    manager.load_art(
+        url,
+        cast(Any, SimpleNamespace(ip_address="10.0.0.5")),
+        cast(Any, album_label),
     )
-    # should have set current_art_url
-    assert app.current_art_url is not None
-    # second call with same URL should no-op due to cache
-    prev = app.current_art_url
-    mod.ArtworkManager.load_art(app, prev, speaker, cast(Any, app.album_label))
+
+    cached = cast(Any, manager.art_cache[url])
+
+    assert manager.current_art_url == url
+    assert manager.displayed_art_url == url
+    assert url in manager.art_cache
+    assert cached.data == b"png-bytes"
+    assert album_label.pixmap is manager.art_cache[url]
+
+
+def test_load_art_skips_already_displayed_artwork(monkeypatch: pytest.MonkeyPatch):
+    """Test that `load_art` skips processing when the artwork URL is already displayed.
+    This test creates a minimal `SonosApp`-like object with `current` set,
+    and verifies that the method returns early when the artwork URL matches the displayed one.
+    """
+    mod = artwork_mod
+    manager = mod.ArtworkManager(ArtworkDatabase(":memory:"))
+    manager.displayed_art_url = "http://fake-url.test/album.jpg"
+
+    # Create a minimal album label stub for testing
+    class AlbumLabel:
+        """Minimal album label stub for testing."""
+
+        def __init__(self) -> None:
+            self.pixmap: Any | None = None
+
+        def setPixmap(self, pixmap: Any) -> None:
+            self.pixmap = pixmap
+
+    album_label = AlbumLabel()
+
+    # Call load_art with the same URL as displayed_art_url
+    manager.load_art(
+        "http://fake-url.test/album.jpg",
+        cast(Any, SimpleNamespace(ip_address="10.0.0.5")),
+        cast(Any, album_label),
+    )

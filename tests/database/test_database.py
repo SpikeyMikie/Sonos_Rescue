@@ -38,20 +38,6 @@ def test_insert_and_get_artwork_data(artwork_db: ArtworkDatabase):
     assert retrieved_data == data
 
 
-def test_delete_artwork_data(artwork_db: ArtworkDatabase):
-    """Retrieved data should be None after deletion."""
-    url = "http://example.com/artwork_to_delete.jpg"
-    data = b"fake_image_data_to_delete"
-
-    artwork_db.insert_artwork_data(url, data)
-
-    artwork_db.delete_artwork_data(url)
-
-    # Try to retrieve deleted artwork data
-    retrieved_data = artwork_db.get_artwork_data(url)
-    assert retrieved_data is None
-
-
 def test_get_artwork_data_nonexistent_url(artwork_db: ArtworkDatabase):
     """Retrieved data should be None for nonexistent URL."""
     url = "http://example.com/nonexistent_artwork.jpg"
@@ -74,6 +60,20 @@ def test_insert_artwork_data_replaces_existing(artwork_db: ArtworkDatabase):
     # Retrieve artwork data and check if it matches the new data
     retrieved_data = artwork_db.get_artwork_data(url)
     assert retrieved_data == new_data
+
+
+def test_delete_artwork_data(artwork_db: ArtworkDatabase):
+    """Retrieved data should be None after deletion."""
+    url = "http://example.com/artwork_to_delete.jpg"
+    data = b"fake_image_data_to_delete"
+
+    artwork_db.insert_artwork_data(url, data)
+
+    artwork_db.delete_artwork_data(url)
+
+    # Try to retrieve deleted artwork data
+    retrieved_data = artwork_db.get_artwork_data(url)
+    assert retrieved_data is None
 
 
 def test_close_database_connection(artwork_db: ArtworkDatabase):

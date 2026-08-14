@@ -4,13 +4,17 @@ import sqlite3
 
 
 class ArtworkDatabase:
-    """Class to manage the artwork database."""
+    """
+    Class to manage the artwork database.
+    This class provides methods to initialize the database, insert, retrieve,
+    and delete artwork data, as well as to close the database connection.
+    """
 
     def __init__(self, db_path: str = ":memory:") -> None:
         self.connection = sqlite3.connect(db_path)
-        self.init_artwork_database()
+        self.init_artwork_db()
 
-    def init_artwork_database(self) -> None:
+    def init_artwork_db(self) -> None:
         """Initialize the artwork database."""
         self.connection.execute("""
         CREATE TABLE IF NOT EXISTS artwork (
