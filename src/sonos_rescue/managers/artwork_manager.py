@@ -12,17 +12,18 @@ from PyQt6.QtWidgets import QLabel
 from soco import SoCo  # type: ignore[import-untyped]
 from urllib.request import Request, urlopen
 
+from sonos_rescue.database.database import ArtworkDatabase
+
 
 class ArtworkManager:
     """
-    Manages the retrieval and caching of album artwork.
-
-    This class handles downloading album artwork from Sonos devices,
-    resizing images for display, and caching them in memory to improve
-    performance and reduce network requests.
+    Manages album artwork retrieval, caching, and display for Sonos devices.
     """
 
-    def __init__(self) -> None:
+    MAX_CACHE = 20
+
+    def __init__(self, database: ArtworkDatabase) -> None:
+        self.database = database
         self.art_cache: dict[str, QPixmap] = {}
         self.current_art_url: str | None = None
         self.displayed_art_url: str | None = None
@@ -40,7 +41,7 @@ class ArtworkManager:
         try:
             audio = MP3(file_path, ID3=ID3)
 
-            tags: dict[object, APICProtocol] | None = cast(
+            tags = cast(
                 dict[object, APICProtocol] | None,
                 audio.tags,  # pyright: ignore[reportUnknownMemberType]
             )
@@ -61,10 +62,11 @@ class ArtworkManager:
     # Load and display album art from URL
     def load_art(self, url: str, speaker: SoCo, album_label: QLabel) -> None:
         """
-        Download and display album artwork.
-
-        Album artwork is cached in memory to reduce network requests and
-        improve UI responsiveness when the same artwork is displayed again.
+        Load and display album art from a given URL.
+        Args:
+            url (str): The URL of the album artwork.
+            speaker (SoCo): The Sonos speaker instance.
+            album_label (QLabel): The QLabel widget to display the artwork.
         """
         try:
             if not url or url == "None":
@@ -82,9 +84,22 @@ class ArtworkManager:
             if url == self.displayed_art_url:
                 return
 
-            # If cached use it
+            # check if the artwork is already cached in memory
             if url in self.art_cache:
                 album_label.setPixmap(self.art_cache[url])
+                self.displayed_art_url = url
+                return
+
+            # if the artwork is already cached in the database, load it from there
+            cached_bytes = self.database.get_artwork_data(url)
+            if cached_bytes is not None:
+                cached_pixmap = QPixmap()
+                cached_pixmap.loadFromData(cached_bytes)
+                self.art_cache[url] = cached_pixmap
+                if len(self.art_cache) > self.MAX_CACHE:
+                    self.art_cache.pop(next(iter(self.art_cache)))
+                album_label.setPixmap(cached_pixmap)
+                self.displayed_art_url = url
                 return
 
             # Otherwise fetch it
@@ -99,17 +114,15 @@ class ArtworkManager:
             png_buffer = BytesIO()
             resized_image.save(png_buffer, format="PNG")
 
-            pixmap = QPixmap()
-            pixmap.loadFromData(png_buffer.getvalue())
+            download_pixmap = QPixmap()
+            download_pixmap.loadFromData(png_buffer.getvalue())
 
-            # Store in cache
-            self.art_cache[url] = pixmap
-            MAX_CACHE = 20
-
-            if len(self.art_cache) > MAX_CACHE:
+            self.art_cache[url] = download_pixmap
+            if len(self.art_cache) > self.MAX_CACHE:
                 self.art_cache.pop(next(iter(self.art_cache)))
+            self.database.insert_artwork_data(url, png_buffer.getvalue())
 
-            album_label.setPixmap(pixmap)
+            album_label.setPixmap(download_pixmap)
             self.displayed_art_url = url
 
         except Exception as e:
