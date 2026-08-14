@@ -21,7 +21,7 @@ class ArtworkManager:
     """
 
     def __init__(self, database: ArtworkDatabase) -> None:
-        self.database: ArtworkDatabase = database
+        self.database = database
         self.art_cache: dict[str, QPixmap] = {}
         self.current_art_url: str | None = None
         self.displayed_art_url: str | None = None
