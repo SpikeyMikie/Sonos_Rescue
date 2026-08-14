@@ -56,11 +56,33 @@ def test_load_art_uses_memory_cache(monkeypatch: pytest.MonkeyPatch):
     mod = artwork_mod
 
     manager = mod.ArtworkManager(ArtworkDatabase(":memory:"))
-    manager.art_cache = {"http://fake-url.test/album.jpg": "cached_pixmap"}
+    url = "http://fake-url.test/album.jpg"
+    cached_pixmap = object()
+    manager.art_cache = {url: cached_pixmap}
 
-    assert "http://fake-url.test/album.jpg" in manager.art_cache
+    def fail_urlopen(*args: object, **kwargs: object) -> None:
+        raise AssertionError("urlopen should not be called for cached artwork")
 
-    assert manager.art_cache["http://fake-url.test/album.jpg"] == "cached_pixmap"
+    monkeypatch.setattr(mod, "urlopen", fail_urlopen)
+
+    class AlbumLabel:
+        def __init__(self) -> None:
+            self.pixmap: Any | None = None
+
+        def setPixmap(self, pixmap: Any) -> None:
+            self.pixmap = pixmap
+
+    album_label = AlbumLabel()
+
+    manager.load_art(
+        url,
+        cast(Any, SimpleNamespace(ip_address="10.0.0.5")),
+        cast(Any, album_label),
+    )
+
+    assert manager.current_art_url == url
+    assert manager.displayed_art_url == url
+    assert album_label.pixmap is cached_pixmap
 
 
 def test_load_art_uses_database_cache(monkeypatch: pytest.MonkeyPatch):
@@ -182,12 +204,96 @@ def test_load_art_skips_already_displayed_artwork(monkeypatch: pytest.MonkeyPatc
     """
     mod = artwork_mod
     manager = mod.ArtworkManager(ArtworkDatabase(":memory:"))
-    manager.displayed_art_url = "http://fake-url.test/album.jpg"
+    url = "http://fake-url.test/album.jpg"
+    manager.displayed_art_url = url
+
+    def fail_urlopen(*args: object, **kwargs: object) -> None:
+        raise AssertionError("urlopen should not be called for displayed artwork")
+
+    monkeypatch.setattr(mod, "urlopen", fail_urlopen)
 
     # Create a minimal album label stub for testing
     class AlbumLabel:
         """Minimal album label stub for testing."""
 
+        def __init__(self) -> None:
+            self.pixmap: Any | None = None
+            self.set_pixmap_calls = 0
+
+        def setPixmap(self, pixmap: Any) -> None:
+            self.pixmap = pixmap
+            self.set_pixmap_calls += 1
+
+    album_label = AlbumLabel()
+
+    # Call load_art with the same URL as displayed_art_url
+    manager.load_art(
+        url,
+        cast(Any, SimpleNamespace(ip_address="10.0.0.5")),
+        cast(Any, album_label),
+    )
+
+    assert manager.current_art_url == url
+    assert manager.displayed_art_url == url
+    assert album_label.set_pixmap_calls == 0
+
+
+def test_load_art_evicts_oldest_cached_artwork(monkeypatch: pytest.MonkeyPatch):
+    """`load_art` should keep the in-memory artwork cache bounded."""
+    mod = artwork_mod
+    manager = mod.ArtworkManager(ArtworkDatabase(":memory:"))
+    manager.art_cache = {
+        f"http://fake-url.test/old-{index}.jpg": cast(Any, object())
+        for index in range(manager.MAX_CACHE)
+    }
+    url = "http://fake-url.test/new.jpg"
+
+    class FakeResp:
+        def __enter__(self):
+            return self
+
+        def __exit__(
+            self,
+            _exc_type: type | None,
+            _exc: BaseException | None,
+            _tb: types.TracebackType | None,
+        ) -> typing.Literal[False]:
+            return False
+
+        def read(self):
+            return b"downloaded_image_data"
+
+    def fake_urlopen(
+        _req: Any, *args: object, timeout: int = 3, **kwargs: object
+    ) -> FakeResp:
+        return FakeResp()
+
+    monkeypatch.setattr(mod, "urlopen", fake_urlopen)
+
+    class FakeImage:
+        def resize(self, size: tuple[int, int]):
+            assert size == (300, 300)
+            return FakeResizedImage()
+
+    class FakeResizedImage:
+        def save(self, buffer: Any, format: str) -> None:
+            buffer.write(b"png-bytes")
+
+    def fake_image_open(_data: Any) -> FakeImage:
+        return FakeImage()
+
+    monkeypatch.setattr(mod.Image, "open", fake_image_open)
+
+    class FakePixmap:
+        def __init__(self):
+            self.data = None
+
+        def loadFromData(self, d: bytes):
+            self.data = d
+
+    monkeypatch.setattr(mod, "QPixmap", FakePixmap)
+
+    class AlbumLabel:
         def __init__(self) -> None:
             self.pixmap: Any | None = None
 
@@ -196,9 +302,12 @@ def test_load_art_skips_already_displayed_artwork(monkeypatch: pytest.MonkeyPatc
 
     album_label = AlbumLabel()
 
-    # Call load_art with the same URL as displayed_art_url
     manager.load_art(
-        "http://fake-url.test/album.jpg",
+        url,
         cast(Any, SimpleNamespace(ip_address="10.0.0.5")),
         cast(Any, album_label),
     )
+
+    assert len(manager.art_cache) == manager.MAX_CACHE
+    assert "http://fake-url.test/old-0.jpg" not in manager.art_cache
+    assert url in manager.art_cache

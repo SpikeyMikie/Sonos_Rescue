@@ -38,6 +38,7 @@ from PyQt6.QtWidgets import (
 
 # internal app imports
 from .services.local_music_server import LocalMusicServer
+from .database.database import ArtworkDatabase
 from .managers.speaker_manager import SpeakerManager
 from .managers.playback_controller import PlaybackController
 from .managers.artwork_manager import ArtworkManager
@@ -86,7 +87,8 @@ class SonosApp(QWidget):
         self.server: LocalMusicServer | None = None
 
         self.speaker_manager = SpeakerManager()
-        self.artwork_manager: ArtworkManager = ArtworkManager()
+        self.artwork_database = ArtworkDatabase()
+        self.artwork_manager: ArtworkManager = ArtworkManager(self.artwork_database)
         self.playback_controller = PlaybackController(
             get_current_speaker=lambda: self.current
         )

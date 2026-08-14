@@ -20,6 +20,8 @@ class ArtworkManager:
     Manages album artwork retrieval, caching, and display for Sonos devices.
     """
 
+    MAX_CACHE = 20
+
     def __init__(self, database: ArtworkDatabase) -> None:
         self.database = database
         self.art_cache: dict[str, QPixmap] = {}
@@ -94,6 +96,8 @@ class ArtworkManager:
                 cached_pixmap = QPixmap()
                 cached_pixmap.loadFromData(cached_bytes)
                 self.art_cache[url] = cached_pixmap
+                if len(self.art_cache) > self.MAX_CACHE:
+                    self.art_cache.pop(next(iter(self.art_cache)))
                 album_label.setPixmap(cached_pixmap)
                 self.displayed_art_url = url
                 return
@@ -114,6 +118,8 @@ class ArtworkManager:
             download_pixmap.loadFromData(png_buffer.getvalue())
 
             self.art_cache[url] = download_pixmap
+            if len(self.art_cache) > self.MAX_CACHE:
+                self.art_cache.pop(next(iter(self.art_cache)))
             self.database.insert_artwork_data(url, png_buffer.getvalue())
 
             album_label.setPixmap(download_pixmap)
