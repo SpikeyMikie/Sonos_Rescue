@@ -142,9 +142,9 @@ class SonosApp(QWidget):
 
         self.album = QLabel()
         self.album.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.album.setFixedSize(300, 300)
-        self.album.setMinimumSize(300, 300)
-        self.album.setMaximumSize(300, 300)
+        self.album.setFixedSize(500, 500)
+        self.album.setMinimumSize(500, 500)
+        self.album.setMaximumSize(500, 500)
         self.album.setSizePolicy(
             QSizePolicy.Policy.Fixed,
             QSizePolicy.Policy.Fixed,
