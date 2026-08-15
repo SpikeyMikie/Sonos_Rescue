@@ -2,13 +2,13 @@ from __future__ import annotations
 from io import BytesIO
 from pathlib import Path
 from typing import cast
-from PIL import Image
+from PIL import Image, ImageOps
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3
 from mutagen.id3._frames import APIC as APICProtocol
 from PIL.Image import Image as PILImage
 from PyQt6.QtGui import QPixmap
-from PyQt6.QtWidgets import QLabel
+from PyQt6.QtWidgets import QLabel, QSizePolicy
 from soco import SoCo  # type: ignore[import-untyped]
 from urllib.request import Request, urlopen
 
@@ -86,7 +86,7 @@ class ArtworkManager:
 
             # check if the artwork is already cached in memory
             if url in self.art_cache:
-                album_label.setPixmap(self.art_cache[url])
+                album_label = self.set_album_art(album_label, self.art_cache[url])
                 self.displayed_art_url = url
                 return
 
@@ -98,7 +98,7 @@ class ArtworkManager:
                 self.art_cache[url] = cached_pixmap
                 if len(self.art_cache) > self.MAX_CACHE:
                     self.art_cache.pop(next(iter(self.art_cache)))
-                album_label.setPixmap(cached_pixmap)
+                album_label = self.set_album_art(album_label, cached_pixmap)
                 self.displayed_art_url = url
                 return
 
@@ -108,7 +108,7 @@ class ArtworkManager:
                 image_bytes = response.read()
 
             image_file: PILImage = Image.open(BytesIO(image_bytes))
-            size: tuple[int, int] = (300, 300)
+            size: tuple[int, int] = (500, 500)
             resized_image = resize_image(image_file, size)
 
             png_buffer = BytesIO()
@@ -122,11 +122,31 @@ class ArtworkManager:
                 self.art_cache.pop(next(iter(self.art_cache)))
             self.database.insert_artwork_data(url, png_buffer.getvalue())
 
-            album_label.setPixmap(download_pixmap)
+            album_label = self.set_album_art(album_label, download_pixmap)
+
             self.displayed_art_url = url
 
         except Exception as e:
             print("Album load error:", e)
+
+    def set_album_art(self, album_label: QLabel, pixmap: QPixmap) -> QLabel:
+        """
+        Set the album art on the given QLabel.
+
+        The image is expected to already be square-cropped to 500x500 before
+        it reaches the label, so the label must not stretch it during display.
+
+        Args:
+            album_label (QLabel): The QLabel widget to display the artwork.
+            pixmap (QPixmap): The QPixmap containing the artwork.
+        """
+        album_label.setPixmap(pixmap)
+        album_label.setFixedSize(500, 500)
+        album_label.setMinimumSize(500, 500)
+        album_label.setMaximumSize(500, 500)
+        album_label.setScaledContents(False)
+        album_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        return album_label
 
 
 def resize_image(image: PILImage, size: tuple[int, int]) -> PILImage:
@@ -136,4 +156,4 @@ def resize_image(image: PILImage, size: tuple[int, int]) -> PILImage:
     Kept separate from the main album-loading function to isolate
     image manipulation logic.
     """
-    return image.resize(size)  # pyright: ignore[reportUnknownMemberType]
+    return ImageOps.fit(image, size, method=Image.Resampling.LANCZOS)
