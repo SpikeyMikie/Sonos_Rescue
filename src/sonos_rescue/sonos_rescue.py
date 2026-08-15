@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSlider,
     QVBoxLayout,
     QWidget,
@@ -141,6 +142,14 @@ class SonosApp(QWidget):
 
         self.album = QLabel()
         self.album.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.album.setFixedSize(300, 300)
+        self.album.setMinimumSize(300, 300)
+        self.album.setMaximumSize(300, 300)
+        self.album.setSizePolicy(
+            QSizePolicy.Policy.Fixed,
+            QSizePolicy.Policy.Fixed,
+        )
+        self.album.setScaledContents(False)
 
         self.track_info = QLabel("")
         self.track_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -326,7 +335,7 @@ class SonosApp(QWidget):
             if art_data:
                 pixmap = QPixmap()
                 pixmap.loadFromData(art_data)
-                self.album.setPixmap(pixmap)
+                self.artwork_manager.set_album_art(self.album, pixmap)
 
             # Sonos cannot access local filesystem paths directly.
             # A temporary HTTP server exposes the selected file so the speaker
