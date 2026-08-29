@@ -8,8 +8,6 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-import sys
-
 # internal imports
 from sonos_rescue.utils.resources import resource_path
 
@@ -19,11 +17,11 @@ from sonos_rescue.utils.resources import resource_path
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent: QMainWindow | None = None):
+        super().__init__(parent)
         self.setWindowTitle("Sonos Rescue")
 
-        layout_main = QHBoxLayout()  # main layout
+        layout_main = QHBoxLayout()
         layout_main.setContentsMargins(0, 0, 30, 0)
 
         # rooms_panel = RoomsPanel()
@@ -68,8 +66,10 @@ class MainWindow(QMainWindow):
         )
         refresh_action.setStatusTip("Find or Refresh the list of Speakers / Rooms")
         refresh_action.setShortcut(QKeySequence("Ctrl+f"))
-        refresh_action.triggered.connect(self.button_clicked)
-        toolbar.addAction(refresh_action)
+        refresh_action.triggered.connect(  # pyright: ignore[reportUnknownMemberType]
+            self.button_clicked
+        )
+        toolbar.addAction(refresh_action)  # pyright: ignore[reportUnknownMemberType]
         toolbar.addSeparator()
 
         play_local_pixmap = QPixmap(
@@ -88,83 +88,19 @@ class MainWindow(QMainWindow):
         )
 
         play_local_action.setStatusTip("Play a local music file")
-        play_local_action.triggered.connect(self.button_clicked)
-        toolbar.addAction(play_local_action)
+        play_local_action.triggered.connect(  # pyright: ignore[reportUnknownMemberType]
+            self.button_clicked
+        )
+        toolbar.addAction(play_local_action)  # pyright: ignore[reportUnknownMemberType]
 
         self.setStatusBar(QStatusBar(self))
-        file_menu = self.menuBar().addMenu("&Menu")
-        file_menu.addAction(refresh_action)
-        file_menu.addSeparator()
-        file_menu.addAction(play_local_action)
+        file_menu = self.menuBar()
+        assert file_menu is not None  # to satisfy pyright
+        menu = file_menu.addMenu("&Menu")
+        assert menu is not None  # to satisfy pyright
+        menu.addAction(refresh_action)  # pyright: ignore[reportUnknownMemberType]
+        menu.addSeparator()  # pyright: ignore[reportUnknownMemberType]
+        menu.addAction(play_local_action)  # pyright: ignore[reportUnknownMemberType]
 
     def button_clicked(self, checked: bool) -> None:
         print("click", checked)
-
-
-# app_style = """
-# QMainWindow {
-#     background: qlineargradient(
-#     x1: 0, y1: 0,
-#     x2: 1, y2: 0,
-#     stop: 0 #171E27,
-#     stop: 0.2 #171E27,
-#     stop: 1 #271817
-# );
-#     color: #FFFFFF;
-#     font-size: 16px;
-# }
-# QToolBar {
-#     background: qlineargradient(
-#         x1: 0, y1: 0,
-#         x2: 1, y2: 0,
-#         stop: 0 #171E27,
-#         stop: 0.2 #171E27,
-#         stop: 1 #271817
-#     );
-#     color: #FFFFFF;
-#     font-size: 16px;
-#     border-bottom-color: #171E27;
-#     border-left-color: #171E27;
-#     border-right-color: #171E27;
-#     border-top-color: #171E27;
-#     border-width: 1px;
-#     border-style: dashed;
-# }
-# QMenuBar {
-#     background: qlineargradient(
-#         x1: 0, y1: 0,
-#         x2: 1, y2: 0,
-#         stop: 0 #171E27,
-#         stop: 1 #271817
-#     );
-#     color: #FFFFFF;
-#     font-size: 16px;
-# }
-# QMenu {
-#     background: qlineargradient(
-#         x1: 0, y1: 0,
-#         x2: 1, y2: 0,
-#         stop: 0 #171E27,
-#         stop: 1 #271817
-#     );
-#     color: #FFFFFF;
-#     font-size: 16px;
-# }"""
-
-# Possible Highlight colours:
-# pink - #CB64BF
-
-# background-color: #171E27
-# # complimentary background colours:
-# # # 172627 dark teal
-# # # 181727 dark purple
-# # # 271817 dark red - used for gradient
-# # # 262717 dark olive green
-
-# app = QApplication(sys.argv)
-# app.setStyleSheet(app_style)
-# window = MainWindow()
-# window.resize(600, 420)
-# window.setMinimumHeight(420)
-# window.show()
-# app.exec()

@@ -437,8 +437,8 @@ def main() -> None:
     """
     Entry point for the Sonos Rescue application.
 
-    Creates the QApplication instance, initialises the main window,
-    and starts the event loop.
+    Create the QApplication instance, initialise the main window,
+    and start the event loop.
     """
     app_style = """
     QMainWindow {
@@ -491,6 +491,7 @@ def main() -> None:
     }"""
     app = QApplication(sys.argv)
     app.setStyleSheet(app_style)
+
     window = MainWindow()
     window.resize(600, 420)
     window.setMinimumHeight(420)
