@@ -10,16 +10,17 @@ from PyQt6.QtWidgets import (
 
 # internal imports
 from sonos_rescue.utils.resources import resource_path
+from sonos_rescue.managers.speaker_manager import SpeakerManager
 
-# from rooms_panel import RoomsPanel
-# from artwork_panel import ArtworkPanel
-# from playlist_panel import PlaylistPanel
+from sonos_rescue.ui.rooms_panel import RoomsPanel
 
 
 class MainWindow(QMainWindow):
     def __init__(self, parent: QMainWindow | None = None):
         super().__init__(parent)
         self.setWindowTitle("Sonos Rescue")
+
+        self.speaker_manager = SpeakerManager()
 
         layout_main = QHBoxLayout()
         layout_main.setContentsMargins(0, 0, 30, 0)
@@ -28,7 +29,7 @@ class MainWindow(QMainWindow):
         # artwork_panel = ArtworkPanel()
         # playlist_panel = PlaylistPanel()
 
-        rooms_panel = QWidget()  # Placeholder for RoomsPanel
+        rooms_panel = RoomsPanel(self.speaker_manager)
         artwork_panel = QWidget()  # Placeholder for ArtworkPanel
         playlist_panel = QWidget()  # Placeholder for PlaylistPanel
 
@@ -67,7 +68,7 @@ class MainWindow(QMainWindow):
         refresh_action.setStatusTip("Find or Refresh the list of Speakers / Rooms")
         refresh_action.setShortcut(QKeySequence("Ctrl+f"))
         refresh_action.triggered.connect(  # pyright: ignore[reportUnknownMemberType]
-            self.button_clicked
+            self.speaker_manager.discover_speakers
         )
         toolbar.addAction(refresh_action)  # pyright: ignore[reportUnknownMemberType]
         toolbar.addSeparator()

@@ -1,6 +1,7 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtWidgets import QPushButton, QSlider, QVBoxLayout, QHBoxLayout, QWidget
+from sonos_rescue.utils.resources import resource_path
 
 
 class TransportControls(QWidget):
@@ -15,7 +16,9 @@ class TransportControls(QWidget):
         buttons_layout = QHBoxLayout()
         buttons_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.play_pause_button = self.create_icon_button("resources/control.png")
+        self.play_pause_button = self.create_icon_button(
+            str(resource_path("icons/control.png"))
+        )
         self.play_pause_button.setCheckable(True)
         self.play_pause_button.toggled.connect(  # pyright: ignore[reportUnknownMemberType]
             self.update_play_pause_icon
@@ -25,8 +28,12 @@ class TransportControls(QWidget):
         )
         self.play_pause_button.setStatusTip("Play / Pause the current track")
 
-        self.previous_button = self.create_icon_button("resources/control-skip-180.png")
-        self.next_button = self.create_icon_button("resources/control-skip.png")
+        self.previous_button = self.create_icon_button(
+            str(resource_path("icons/control-skip-180.png"))
+        )
+        self.next_button = self.create_icon_button(
+            str(resource_path("icons/control-skip.png"))
+        )
 
         for button in (
             self.play_pause_button,
@@ -46,7 +53,9 @@ class TransportControls(QWidget):
 
         volume_layout = QHBoxLayout()
 
-        self.mute_button = self.create_icon_button("resources/speaker-volume.png")
+        self.mute_button = self.create_icon_button(
+            str(resource_path("icons/speaker-volume.png"))
+        )
         self.mute_button.setCheckable(True)
         self.mute_button.toggled.connect(  # pyright: ignore[reportUnknownMemberType]
             self.toggle_mute
@@ -88,7 +97,9 @@ class TransportControls(QWidget):
 
     def update_play_pause_icon(self, playing: bool) -> None:
         icon_file = (
-            "resources/control-pause.png" if playing else "resources/control.png"
+            str(resource_path("icons/control-play.png"))
+            if playing
+            else str(resource_path("icons/control-pause.png"))
         )
         self.play_pause_button.setIcon(
             QIcon(
@@ -104,9 +115,9 @@ class TransportControls(QWidget):
         self.volume_slider.setEnabled(not muted)
 
         icon_file = (
-            "resources/speaker-volume-control-mute.png"
+            str(resource_path("icons/speaker-volume-control-mute.png"))
             if muted
-            else "resources/speaker-volume.png"
+            else str(resource_path("icons/speaker-volume.png"))
         )
         self.mute_button.setIcon(
             QIcon(
