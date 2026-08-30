@@ -1,68 +1,83 @@
-# Standard library
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PyQt6.QtGui import QMouseEvent
 from typing import Callable
-
-# Type checking exceptions
-import soco  # type: ignore[import-untyped]
+from PyQt6.QtCore import Qt, pyqtSignal, QEvent, QObject
 from soco import SoCo  # type: ignore[import-untyped]
 
-# GUI framework
-from PyQt6.QtWidgets import (
-    QFrame,
-    QVBoxLayout,
-    QLabel,
-    QPushButton,
-)
+from .widgets.rainbow_frame import RainbowFrame
+from .widgets.rainbow_background import RainbowBackground
+from .transport_controls import TransportControls
 
 
-class RoomCard(QFrame):
-    """
-    A GUI card representing a Sonos speaker.
+class RoomCard(QWidget):
+    clicked = pyqtSignal()
+    CARD_HEIGHT = 250
 
-    Displays basic information about a discovered speaker and provides a
-    button that allows the user to select it for control. Multiple
-    RoomCard widgets can be displayed together to create a list of
-    available Sonos devices on the network.
-    """
-
-    def __init__(self, speaker: SoCo, on_select: Callable[[SoCo], None]) -> None:
-        """
-        Initialise a room card for a Sonos speaker.
-
-        Args:
-            speaker:
-                The SoCo speaker instance represented by this card.
-            on_select:
-                Callback function executed when the user selects the
-                speaker for control.
-        """
+    def __init__(
+        self, room_name: str, speaker: SoCo, on_select: Callable[[SoCo], None]
+    ):
         super().__init__()
-        self.speaker: SoCo = speaker
+
         self.on_select: Callable[[SoCo], None] = on_select
+        self.speaker = speaker
+        self.normal_border_width = 1
+        self.selected_border_width = 4
+        self.selected = False
+        self.setFixedHeight(self.CARD_HEIGHT)
+        self.setContentsMargins(0, 0, 0, 0)
+        self.setStyleSheet("""
+            background-color: transparent;
+            border-radius: 10px;
+            color: #FFFFFF;
+            font-size: 16px;
+        """)
+        main_layout = QVBoxLayout()
+        self.setLayout(main_layout)
 
-        self.setFrameShape(QFrame.Shape.Box)
-        self.setStyleSheet("padding:10px; margin:5px; border-radius:8px;")
-
-        layout = QVBoxLayout()
-
-        self.name_label = QLabel(speaker.player_name)
-        self.status_label = QLabel("Idle")
-
-        self.control_button = QPushButton("Control")
-        self.control_button.clicked.connect(  # pyright: ignore[reportUnknownMemberType]
-            self.select
+        layout_rainbow_frame = RainbowFrame(
+            border_width=self.normal_border_width,
+            glow_width=10,
+            radius=16,
         )
+        self.rainbow_frame = layout_rainbow_frame
+        main_layout.addWidget(layout_rainbow_frame)
+        room_background = RainbowBackground(radius=16, alpha=20)
+        frame_layout = QVBoxLayout(layout_rainbow_frame)
+        frame_layout.setContentsMargins(10, 0, 10, 0)
+        frame_layout.addWidget(room_background)
+        frame_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        layout.addWidget(self.name_label)
-        layout.addWidget(self.status_label)
-        layout.addWidget(self.control_button)
+        self.room_label = QLabel(room_name)
+        self.room_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.setLayout(layout)
+        self.transport_controls = TransportControls()
 
-    def select(self) -> None:
-        """
-        Notify the parent application that this speaker has been selected.
+        layout = QVBoxLayout(room_background)
+        layout.addWidget(self.room_label)
+        layout.addSpacing(20)
+        layout.addWidget(self.transport_controls)
+        layout.setContentsMargins(
+            20, 40, 40, 40
+        )  # added 10 to right side to account for the icon on volume slider
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        Invokes the callback (created in init), passing the
-        associated instance.
-        """
+        for child in self.findChildren(QWidget):
+            child.installEventFilter(self)
+
+    def set_selected(self, selected: bool) -> None:
+        self.selected = selected
+        border_width = (
+            self.selected_border_width if selected else self.normal_border_width
+        )
+        self.rainbow_frame.set_border_width(border_width)
         self.on_select(self.speaker)
+        self.update()
+
+    def mousePressEvent(self, a0: QMouseEvent | None) -> None:
+        self.clicked.emit()
+        super().mousePressEvent(a0)
+
+    def eventFilter(self, a0: QObject | None, a1: QEvent | None) -> bool:
+        if a1 is not None and a1.type() == QEvent.Type.MouseButtonPress:
+            self.clicked.emit()
+        return super().eventFilter(a0, a1)
