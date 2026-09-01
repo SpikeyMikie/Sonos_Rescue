@@ -100,9 +100,9 @@ class TransportControls(QWidget):
 
     def update_play_pause_icon(self, playing: bool) -> None:
         icon_file = (
-            str(resource_path("icons/control.png"))
+            str(resource_path("icons/control-pause.png"))
             if playing
-            else str(resource_path("icons/control-pause.png"))
+            else str(resource_path("icons/control.png"))
         )
         self.play_pause_button.setIcon(
             QIcon(
