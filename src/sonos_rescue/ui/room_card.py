@@ -64,7 +64,7 @@ class RoomCard(QWidget):
         layout.addWidget(self.transport_controls)
         layout.setContentsMargins(
             20, 40, 40, 40
-        )  # added 10 to right side to account for the icon on volume slider
+        )  # added 20 to right side to account for the icon on volume slider
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         for child in self.findChildren(QWidget):
