@@ -18,6 +18,8 @@ class PlaylistPanel(QWidget):
         self.panel_layout = QVBoxLayout()
         self.setLayout(self.panel_layout)
         self.panel_layout.setContentsMargins(0, 0, 0, 0)
+        self.setFixedWidth(500)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
 
         self.playlist_rainbow_frame = RainbowFrame(
             border_width=1,
@@ -40,8 +42,6 @@ class PlaylistPanel(QWidget):
         self.playlist_scrollable_area.setWidget(self.playlist_rainbow_frame)
 
         self.panel_layout.addWidget(self.playlist_scrollable_area)
-        self.setFixedWidth(500)
-        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
 
         self.playlist_frame_layout = QVBoxLayout(self.playlist_rainbow_frame)
         self.playlist_frame_layout.setContentsMargins(10, 10, 10, 10)
@@ -58,7 +58,7 @@ class PlaylistPanel(QWidget):
         self.queue: QListWidget = QListWidget()
         self.queue.setMinimumWidth(300)
         self.queue.setSizePolicy(
-            QSizePolicy.Policy.Fixed,
+            QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Expanding,
         )
 
