@@ -19,6 +19,11 @@ class ScalingImageLabel(QLabel):
         self._original_pixmap = pixmap
         self._update_scaled_pixmap()
 
+    def clear(self) -> None:
+        """Clear both the displayed image and its source pixmap."""
+        self._original_pixmap = QPixmap()
+        super().clear()
+
     def resizeEvent(self, a0: QResizeEvent | None) -> None:
         super().resizeEvent(a0)
         self._update_scaled_pixmap()

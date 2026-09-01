@@ -40,7 +40,7 @@ class PlaybackController:
                 current.play()  # pyright: ignore[reportUnknownMemberType]
             except SoCoUPnPException as e:
                 # error 701: nothing loaded as the transport source yet, fall back to the queue
-                if e.error_code == "701" and current.get_queue():
+                if str(e.error_code) == "701" and current.get_queue():
                     current.play_from_queue(
                         0
                     )  # pyright: ignore[reportUnknownMemberType]

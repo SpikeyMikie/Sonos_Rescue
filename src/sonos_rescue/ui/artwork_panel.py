@@ -5,7 +5,8 @@ from PyQt6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 from .widgets.rainbow_frame import RainbowFrame
 from .widgets.rainbow_background import RainbowBackground
 from .widgets.scaling_image_label import ScalingImageLabel
-from sonos_rescue.managers.artwork_manager import ArtworkManager, ArtworkDatabase
+from sonos_rescue.database.database import ArtworkDatabase
+from sonos_rescue.managers.artwork_manager import ArtworkManager
 
 
 class ArtworkPanel(QWidget):

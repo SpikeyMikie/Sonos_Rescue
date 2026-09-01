@@ -224,7 +224,9 @@ class MainWindow(QMainWindow):
             art: str | None = track.get("album_art")
 
             if art:
-                self.artwork_manager.load_art(art, self.current, self.artwork_panel)
+                self.artwork_manager.load_art(
+                    art, self.current, self.artwork_panel.artwork_label
+                )
 
             # update queue (lightweight)
             q = cast(list[QueueItemProtocol], self.current.get_queue())

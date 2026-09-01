@@ -41,6 +41,7 @@ def test_room_card_select_calls_set_selected() -> None:
     assert card.selected is True
     card.set_selected(False)
     assert card.selected is False
+    assert _called["s"] is card.speaker
 
 
 def test_room_card_does_not_call_on_select_on_construction() -> None:

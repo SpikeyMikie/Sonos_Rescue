@@ -76,7 +76,8 @@ class RoomCard(QWidget):
             self.selected_border_width if selected else self.normal_border_width
         )
         self.rainbow_frame.set_border_width(border_width)
-        self.on_select(self.speaker)
+        if selected:
+            self.on_select(self.speaker)
         self.update()
 
     def mousePressEvent(self, a0: QMouseEvent | None) -> None:

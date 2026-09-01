@@ -56,6 +56,21 @@ def test_display_artwork_none_clears_pixmap() -> None:
     assert panel.artwork_label.pixmap().isNull()
 
 
+def test_cleared_artwork_does_not_reappear_after_resize() -> None:
+    """Cleared artwork should remain absent after the label is resized."""
+
+    app = (  # pyright: ignore[reportUnusedVariable]
+        QApplication.instance() or QApplication(sys.argv)
+    )
+
+    panel = ArtworkPanel()
+    panel.display_artwork(make_pixmap())
+    panel.display_artwork(None)
+    panel.artwork_label.resize(500, 300)
+
+    assert panel.artwork_label.pixmap().isNull()
+
+
 def test_display_artwork_replaces_previous_pixmap() -> None:
     """Calling display_artwork again with a new pixmap should replace the old one."""
 
