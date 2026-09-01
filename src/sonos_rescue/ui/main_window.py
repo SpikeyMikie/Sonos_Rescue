@@ -1,8 +1,10 @@
 # Main window for the Sonos Rescue application
 
 # Standard library imports
+from pathlib import Path
 from typing import Protocol, cast
 from time import sleep
+from urllib.parse import quote
 import threading
 
 # third-party imports
@@ -24,10 +26,12 @@ from PyQt6.QtWidgets import (
 )
 
 # internal imports
+from sonos_rescue.utils.network import get_local_ip
 from sonos_rescue.utils.resources import resource_path
 from sonos_rescue.managers.speaker_manager import SpeakerManager
 from sonos_rescue.managers.artwork_manager import ArtworkManager
 
+from sonos_rescue.services.local_music_server import LocalMusicServer
 from sonos_rescue.ui.rooms_panel import RoomsPanel
 from sonos_rescue.ui.artwork_panel import ArtworkPanel
 from sonos_rescue.database.database import ArtworkDatabase
@@ -134,21 +138,30 @@ class MainWindow(QMainWindow):
         self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.title.setStyleSheet("font-size:18px;")
 
+        self.port: int = LocalMusicServer.DEFAULT_PORT
+        self.server: LocalMusicServer | None = None
+
         # Start background refresh thread
         self.running = True
         threading.Thread(target=self.refresh_loop, daemon=True).start()
 
     def play_local_file(self) -> None:
-        # Implement the logic to play a local music file
-        file_path, _ = QFileDialog.getOpenFileName(
+        """Prompt for a local music file, then display its artwork and stream it."""
+        file_path_str, _ = QFileDialog.getOpenFileName(
             self,
             "Select a music file",
             "",
             "Audio Files (*.mp3 *.flac *.wav *.m4a)",
         )
-        if not file_path:
+        if not file_path_str:
             return
 
+        file_path = Path(file_path_str)
+        self.display_local_artwork(file_path)
+        self.stream_local_file(file_path)
+
+    def display_local_artwork(self, file_path: Path) -> None:
+        """Extract and display any embedded album artwork for a local file."""
         image_data = self.artwork_manager.get_album_art_from_file(file_path)
         pixmap = None
         if image_data is not None:
@@ -156,8 +169,28 @@ class MainWindow(QMainWindow):
             pixmap.loadFromData(image_data)
         self.artwork_panel.display_artwork(pixmap)
 
-        # TODO: actual playback (streaming to Sonos) is a separate step —
-        # this only lets us test artwork extraction/display for now
+    def stream_local_file(self, file_path: Path) -> None:
+        """Serve a local file over HTTP and instruct the selected speaker to play it."""
+        if not self.current:
+            QMessageBox.warning(self, "No speaker", "Select a room first")
+            return
+
+        try:
+            # Sonos cannot access local filesystem paths directly, so a
+            # temporary HTTP server exposes the file for the speaker to stream.
+            if self.server is None or self.server.folder != file_path.parent:
+                if self.server is not None:
+                    self.server.stop()
+                self.server = LocalMusicServer(file_path.parent, self.port)
+                self.server.start()
+
+            ip = get_local_ip()
+            url = f"http://{ip}:{self.server.port}/{quote(file_path.name)}"
+
+            self.current.play_uri(url)  # pyright: ignore[reportUnknownMemberType]
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
 
     def refresh_loop(self) -> None:
         """
