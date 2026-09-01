@@ -34,6 +34,9 @@ class ArtworkPanel(QWidget):
             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter
         )
         now_playing_label.setFixedHeight(30)
+        self.title = QLabel("No room selected")
+        self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.title.setStyleSheet("font-size:18px;")
         artwork_layout = QVBoxLayout(artwork_rainbow_frame)
         artwork_layout.setContentsMargins(10, 10, 10, 10)
         artwork_layout.addWidget(artwork_rainbow_background)
@@ -54,9 +57,9 @@ class ArtworkPanel(QWidget):
         )
         self.artwork_label.setContentsMargins(20, 0, 20, 0)
         self.artwork_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        artwork_content_layout.addWidget(
-            now_playing_label,
-        )
+        artwork_content_layout.addWidget(now_playing_label)
+        artwork_content_layout.addWidget(self.title)
+
         # no alignment here: it would size the label to its sizeHint instead of stretching it
         artwork_content_layout.addWidget(
             self.artwork_label,

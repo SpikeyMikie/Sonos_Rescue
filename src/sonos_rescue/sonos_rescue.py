@@ -92,9 +92,9 @@ class SonosApp(QWidget):
         self.speaker_manager = SpeakerManager()
         self.artwork_database = ArtworkDatabase()
         self.artwork_manager: ArtworkManager = ArtworkManager(self.artwork_database)
-        self.playback_controller = PlaybackController(
-            get_current_speaker=lambda: self.current
-        )
+        # self.playback_controller = PlaybackController(
+        #     get_current_speaker=lambda: self.current
+        # )
 
         self.play_btn: QPushButton
         self.build_ui()
@@ -138,9 +138,9 @@ class SonosApp(QWidget):
         # Center panel: now playing information and playback controls
         center_layout = QVBoxLayout()
 
-        self.title = QLabel("No room selected")
-        self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.title.setStyleSheet("font-size:18px;")
+        # self.title = QLabel("No room selected")
+        # self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # self.title.setStyleSheet("font-size:18px;")
 
         self.album = QLabel()
         self.album.setAlignment(Qt.AlignmentFlag.AlignCenter)

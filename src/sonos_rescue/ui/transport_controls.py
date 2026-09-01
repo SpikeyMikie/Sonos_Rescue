@@ -2,13 +2,16 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtWidgets import QPushButton, QSlider, QVBoxLayout, QHBoxLayout, QWidget
 from sonos_rescue.utils.resources import resource_path
+from sonos_rescue.managers.playback_controller import PlaybackController
 
 
 class TransportControls(QWidget):
     ICON_SIZE = 32
 
-    def __init__(self):
+    def __init__(self, playback_controller: PlaybackController):
         super().__init__()
+
+        self.playback_controller = playback_controller
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -24,7 +27,7 @@ class TransportControls(QWidget):
             self.update_play_pause_icon
         )
         self.play_pause_button.toggled.connect(  # pyright: ignore[reportUnknownMemberType]
-            self.button_clicked
+            self._on_play_pause_toggled
         )
         self.play_pause_button.setStatusTip("Play / Pause the current track")
 
@@ -44,11 +47,11 @@ class TransportControls(QWidget):
 
         self.previous_button.setStatusTip("Play the previous track")
         self.previous_button.clicked.connect(  # pyright: ignore[reportUnknownMemberType]
-            self.on_button_clicked
+            self._on_prev_clicked
         )
         self.next_button.setStatusTip("Play the next track")
         self.next_button.clicked.connect(  # pyright: ignore[reportUnknownMemberType]
-            self.on_button_clicked
+            self._on_next_clicked
         )
 
         volume_layout = QHBoxLayout()
@@ -61,7 +64,7 @@ class TransportControls(QWidget):
             self.toggle_mute
         )
         self.mute_button.toggled.connect(  # pyright: ignore[reportUnknownMemberType]
-            self.button_clicked
+            self._on_mute_toggled
         )
         self.mute_button.setStatusTip("Mute / Unmute the volume")
 
@@ -71,7 +74,7 @@ class TransportControls(QWidget):
         self.volume_slider.setSingleStep(3)
         self.volume_slider.setStatusTip("Adjust the volume level")
         self.volume_slider.valueChanged.connect(  # pyright: ignore[reportUnknownMemberType]
-            self.button_clicked
+            self.playback_controller.set_volume
         )
 
         volume_layout.addWidget(self.mute_button)
@@ -97,7 +100,7 @@ class TransportControls(QWidget):
 
     def update_play_pause_icon(self, playing: bool) -> None:
         icon_file = (
-            str(resource_path("icons/control-play.png"))
+            str(resource_path("icons/control.png"))
             if playing
             else str(resource_path("icons/control-pause.png"))
         )
@@ -129,8 +132,14 @@ class TransportControls(QWidget):
             )
         )
 
-    def on_button_clicked(self, checked: bool = False) -> None:
-        self.button_clicked(checked)
+    def _on_play_pause_toggled(self, _checked: bool) -> None:
+        self.playback_controller.play_pause()
 
-    def button_clicked(self, checked: bool) -> None:
-        print("click", checked)
+    def _on_prev_clicked(self, _checked: bool) -> None:
+        self.playback_controller.prev_track()
+
+    def _on_next_clicked(self, _checked: bool) -> None:
+        self.playback_controller.next_track()
+
+    def _on_mute_toggled(self, _checked: bool) -> None:
+        self.playback_controller.toggle_mute()

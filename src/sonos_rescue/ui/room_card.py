@@ -4,6 +4,8 @@ from typing import Callable
 from PyQt6.QtCore import Qt, pyqtSignal, QEvent, QObject
 from soco import SoCo  # type: ignore[import-untyped]
 
+from sonos_rescue.managers.playback_controller import PlaybackController
+
 from .widgets.rainbow_frame import RainbowFrame
 from .widgets.rainbow_background import RainbowBackground
 from .transport_controls import TransportControls
@@ -14,7 +16,11 @@ class RoomCard(QWidget):
     CARD_HEIGHT = 250
 
     def __init__(
-        self, room_name: str, speaker: SoCo, on_select: Callable[[SoCo], None]
+        self,
+        room_name: str,
+        speaker: SoCo,
+        on_select: Callable[[SoCo], None],
+        playback_controller: PlaybackController,
     ):
         super().__init__()
 
@@ -50,7 +56,7 @@ class RoomCard(QWidget):
         self.room_label = QLabel(room_name)
         self.room_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.transport_controls = TransportControls()
+        self.transport_controls = TransportControls(playback_controller)
 
         layout = QVBoxLayout(room_background)
         layout.addWidget(self.room_label)

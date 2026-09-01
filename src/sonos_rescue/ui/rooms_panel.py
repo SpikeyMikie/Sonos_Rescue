@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from sonos_rescue.managers.playback_controller import PlaybackController
 from sonos_rescue.managers.speaker_manager import SpeakerManager
 from sonos_rescue.ui.room_card import RoomCard
 from soco import SoCo  # type: ignore[import-untyped]
@@ -19,9 +20,15 @@ class RoomsPanel(QWidget):
     CARD_SPACING = 0
     TOP_MARGIN = 30
 
-    def __init__(self, speaker_manager: SpeakerManager, parent: QWidget | None = None):
+    def __init__(
+        self,
+        speaker_manager: SpeakerManager,
+        playback_controller: PlaybackController,
+        parent: QWidget | None = None,
+    ):
         super().__init__(parent)
         self.speaker_manager = speaker_manager
+        self.playback_controller = playback_controller
         self.selected_room_card: RoomCard | None = None
 
         self.setFixedWidth(500)
@@ -87,7 +94,12 @@ class RoomsPanel(QWidget):
         # add new cards
         for speaker in speakers:
             room_name = getattr(speaker, "player_name", "Unknown Room")
-            card = RoomCard(room_name, speaker, self.speaker_manager.select_speaker)
+            card = RoomCard(
+                room_name,
+                speaker,
+                self.speaker_manager.select_speaker,
+                self.playback_controller,
+            )
             card.clicked.connect(  # pyright: ignore[reportUnknownMemberType]
                 lambda c=card: self._room_selected(c)
             )
