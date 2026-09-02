@@ -1,5 +1,6 @@
 from typing import Callable
 from soco import SoCo  # type: ignore[import-untyped]
+from soco.exceptions import SoCoUPnPException  # type: ignore[import-untyped]
 
 
 class PlaybackController:
@@ -33,8 +34,18 @@ class PlaybackController:
             state = current.get_current_transport_info()["current_transport_state"]
             if state == "PLAYING":
                 current.pause()
-            else:
+                return
+
+            try:
                 current.play()  # pyright: ignore[reportUnknownMemberType]
+            except SoCoUPnPException as e:
+                # error 701: nothing loaded as the transport source yet, fall back to the queue
+                if str(e.error_code) == "701" and current.get_queue():
+                    current.play_from_queue(
+                        0
+                    )  # pyright: ignore[reportUnknownMemberType]
+                else:
+                    raise
 
         except Exception as e:
             print("Play/Pause error:", e)
@@ -64,3 +75,15 @@ class PlaybackController:
         current = self.get_current_speaker()
         if current:
             current.volume = v
+
+    def toggle_mute(self) -> None:
+        """Mute the selected speaker."""
+        current = self.get_current_speaker()
+        if not current:
+            return
+
+        try:
+            muted = current.mute
+            current.mute = not muted
+        except Exception as e:
+            print("Toggle mute error:", e)

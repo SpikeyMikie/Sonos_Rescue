@@ -109,7 +109,7 @@ class ArtworkManager:
 
             image_file: PILImage = Image.open(BytesIO(image_bytes))
             size: tuple[int, int] = (500, 500)
-            resized_image = resize_image(image_file, size)
+            resized_image = ImageOps.fit(image_file, size, Image.Resampling.LANCZOS)
 
             png_buffer = BytesIO()
             resized_image.save(png_buffer, format="PNG")
