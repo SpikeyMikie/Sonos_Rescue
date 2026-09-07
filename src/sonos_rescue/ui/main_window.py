@@ -11,7 +11,7 @@ import threading
 from soco import SoCo  # pyright: ignore[reportMissingTypeStubs]
 
 # gui imports
-from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QIcon, QKeySequence, QPixmap, QAction
 from PyQt6.QtWidgets import (
     QFileDialog,
@@ -29,17 +29,21 @@ from PyQt6.QtWidgets import (
 from sonos_rescue.utils.network import get_local_ip
 from sonos_rescue.utils.resources import resource_path
 from sonos_rescue.managers.speaker_manager import SpeakerManager
-from sonos_rescue.managers.artwork_manager import ArtworkManager
-
+from sonos_rescue.managers.artwork_manager import ArtworkManager, ArtResult
 from sonos_rescue.services.local_music_server import LocalMusicServer
 from sonos_rescue.ui.rooms_panel import RoomsPanel
 from sonos_rescue.ui.artwork_panel import ArtworkPanel
 from sonos_rescue.database.database import ArtworkDatabase
-from sonos_rescue.managers.playback_controller import PlaybackController
 from sonos_rescue.ui.playlist_panel import PlaylistPanel
+from sonos_rescue.managers.playback_controller import (
+    NowPlayingUpdate,
+    PlaybackController,
+)
 
 
 class MainWindow(QMainWindow):
+    now_playing_updated = pyqtSignal(object)
+
     def __init__(self, parent: QMainWindow | None = None):
         super().__init__(parent)
         self.setWindowTitle("Sonos Rescue")
@@ -59,6 +63,8 @@ class MainWindow(QMainWindow):
             get_current_speaker=lambda: self.current
         )
 
+        self.art_result: ArtResult | None = None
+        self.now_playing_updated.connect(self.apply_now_playing_update)
         self.artwork_panel = ArtworkPanel()
         self.playlist_panel = PlaylistPanel()
         self.rooms_panel = RoomsPanel(self.speaker_manager, self.playback_controller)
@@ -217,26 +223,58 @@ class MainWindow(QMainWindow):
 
         try:
             track = self.current.get_current_track_info()
-            title = track.get("title", "")
-            artist = track.get("artist", "")
-            album = track.get("album", "")
-            self.track_info.setText(f"{title}\n{artist}\n{album}")
             art: str | None = track.get("album_art")
-
+            art_result = None
             if art:
-                self.artwork_manager.load_art(
-                    art, self.current, self.artwork_panel.artwork_label
+                art_result = self.artwork_manager.resolve_and_fetch_art(
+                    art, self.current
                 )
 
-            # update queue (lightweight)
             q = cast(list[QueueItemProtocol], self.current.get_queue())
-            self.playlist_panel.queue.clear()
-
-            for item in q:
-                self.playlist_panel.queue.addItem(item.title)
+            self.now_playing_updated.emit(
+                NowPlayingUpdate(
+                    title=track.get("title", ""),
+                    artist=track.get("artist", ""),
+                    album=track.get("album", ""),
+                    queue_titles=[item.title for item in q],
+                    art_result=art_result,
+                )
+            )
 
         except Exception as e:
             print("Now playing update error:", e)
+
+    def apply_now_playing_update(self, update: NowPlayingUpdate) -> None:
+        """Apply a playback snapshot on the Qt main thread."""
+        self.track_info.setText(f"{update.title}\n{update.artist}\n{update.album}")
+
+        self.playlist_panel.queue.clear()
+        for title in update.queue_titles:
+            self.playlist_panel.queue.addItem(title)
+
+        result = update.art_result
+        if result is None or result.art_url is None or result.art_bytes is None:
+            return
+
+        if result.art_url == self.artwork_manager.displayed_art_url:
+            return
+
+        pixmap = self.artwork_manager.art_cache.get(result.art_url)
+        if pixmap is None:
+            pixmap = QPixmap()
+            if not pixmap.loadFromData(result.art_bytes):
+                return
+            self.artwork_manager.art_cache[result.art_url] = pixmap
+            if len(self.artwork_manager.art_cache) > self.artwork_manager.MAX_CACHE:
+                self.artwork_manager.art_cache.pop(
+                    next(iter(self.artwork_manager.art_cache))
+                )
+
+        self.artwork_manager.displayed_art_url = result.art_url
+        self.artwork_manager.set_album_art(
+            self.artwork_panel.artwork_label,
+            pixmap,
+        )
 
     def display_selected_speaker(self, speaker: SoCo) -> None:
         """Update the GUI to reflect the currently selected Sonos speaker."""

@@ -1,6 +1,20 @@
+from dataclasses import dataclass
 from typing import Callable
 from soco import SoCo  # type: ignore[import-untyped]
 from soco.exceptions import SoCoUPnPException  # type: ignore[import-untyped]
+
+from sonos_rescue.managers.artwork_manager import ArtResult
+
+
+@dataclass(frozen=True)
+class NowPlayingUpdate:
+    """Immutable playback snapshot passed from the refresh worker to Qt."""
+
+    title: str
+    artist: str
+    album: str
+    queue_titles: list[str]
+    art_result: ArtResult | None
 
 
 class PlaybackController:
