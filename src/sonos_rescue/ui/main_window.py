@@ -9,7 +9,7 @@ from urllib.parse import quote
 from soco import SoCo  # pyright: ignore[reportMissingTypeStubs]
 
 # gui imports
-from PyQt6.QtCore import QSize, Qt, QThread, QTimer
+from PyQt6.QtCore import QMetaObject, QSize, Qt, QThread, QTimer
 from PyQt6.QtGui import QIcon, QKeySequence, QPixmap, QAction, QCloseEvent
 from PyQt6.QtWidgets import (
     QFileDialog,
@@ -27,7 +27,7 @@ from PyQt6.QtWidgets import (
 from sonos_rescue.utils.network import get_local_ip
 from sonos_rescue.utils.resources import resource_path
 from sonos_rescue.managers.speaker_manager import SpeakerManager
-from sonos_rescue.managers.artwork_manager import ArtworkManager, ArtResult
+from sonos_rescue.managers.artwork_manager import ArtworkManager
 from sonos_rescue.services.local_music_server import LocalMusicServer
 from sonos_rescue.ui.rooms_panel import RoomsPanel
 from sonos_rescue.ui.artwork_panel import ArtworkPanel
@@ -59,7 +59,6 @@ class MainWindow(QMainWindow):
             get_current_speaker=lambda: self.current
         )
 
-        self.art_result: ArtResult | None = None
         self.artwork_panel = ArtworkPanel()
         self.playlist_panel = PlaylistPanel()
         self.rooms_panel = RoomsPanel(self.speaker_manager, self.playback_controller)
@@ -152,7 +151,7 @@ class MainWindow(QMainWindow):
         self.playback_poller_thread = QThread()
         self.playback_poller.moveToThread(self.playback_poller_thread)
         self.playback_poller_thread.started.connect(  # pyright: ignore[reportUnknownMemberType]
-            self.playback_poller.run
+            self.playback_poller.start_polling
         )
         QTimer.singleShot(  # pyright: ignore[reportUnknownMemberType]
             0, self.playback_poller_thread.start
@@ -211,7 +210,11 @@ class MainWindow(QMainWindow):
     def update_now_playing(self) -> None:
         """Trigger an immediate poll of the selected speaker."""
         if self.current:
-            self.playback_poller.poll_once()
+            QMetaObject.invokeMethod(
+                self.playback_poller,
+                "poll_once",
+                Qt.ConnectionType.QueuedConnection,
+            )
 
     def apply_now_playing_update(self, update: NowPlayingUpdate) -> None:
         """Apply a playback snapshot on the Qt main thread."""
@@ -284,9 +287,13 @@ class MainWindow(QMainWindow):
         """Handle the window close event by stopping the playback poller."""
         poller = getattr(self, "playback_poller", None)
         if poller is not None:
-            poller.stop()
             thread = poller.thread()
             if thread is not None:
+                QMetaObject.invokeMethod(
+                    poller,
+                    "stop",
+                    Qt.ConnectionType.BlockingQueuedConnection,
+                )
                 thread.quit()
                 thread.wait()
 

@@ -2,9 +2,8 @@
 
 from dataclasses import dataclass
 from collections.abc import Callable, Iterable
-from time import sleep
 from typing import Any, cast
-from PyQt6.QtCore import QObject, pyqtSignal
+from PyQt6.QtCore import QObject, QTimer, pyqtSignal, pyqtSlot
 from soco import SoCo  # type: ignore[import-untyped]
 from sonos_rescue.managers.artwork_manager import ArtResult, ArtworkManager
 
@@ -16,7 +15,7 @@ class NowPlayingUpdate:
     title: str
     artist: str
     album: str
-    queue_titles: list[str]
+    queue_titles: tuple[str, ...]
     art_result: ArtResult | None
 
 
@@ -33,8 +32,9 @@ class PlaybackPoller(QObject):
         super().__init__()
         self.get_current_speaker = get_current_speaker
         self.artwork_manager = artwork_manager
-        self._running = False
+        self._timer: QTimer | None = None
 
+    @pyqtSlot()
     def poll_once(self) -> None:
         """Poll the current speaker once and emit a NowPlayingUpdate signal."""
         current = self.get_current_speaker()
@@ -68,20 +68,29 @@ class PlaybackPoller(QObject):
                 title=title,
                 artist=artist,
                 album=album,
-                queue_titles=queue_titles,
+                queue_titles=tuple(queue_titles),
                 art_result=art_result,
             )
             self.now_playing_updated.emit(update)
         except Exception as e:
             print("Poll once error:", e)
 
-    def run(self) -> None:
-        """Continuously poll the current playback state until stopped."""
-        self._running = True
-        while self._running:
-            self.poll_once()
-            sleep(2)
+    @pyqtSlot()
+    def start_polling(self) -> None:
+        """Start periodic polling on the worker thread event loop."""
+        if self._timer is not None and self._timer.isActive():
+            return
+        if self._timer is None:
+            self._timer = QTimer(self)
+            self._timer.setInterval(2000)
+            self._timer.timeout.connect(  # pyright: ignore[reportUnknownMemberType]
+                self.poll_once
+            )
+        self._timer.start()  # pyright: ignore[reportUnknownMemberType]
+        self.poll_once()
 
+    @pyqtSlot()
     def stop(self) -> None:
-        """Stop the continuous polling loop."""
-        self._running = False
+        """Stop periodic polling."""
+        if self._timer is not None:
+            self._timer.stop()  # pyright: ignore[reportUnknownMemberType]

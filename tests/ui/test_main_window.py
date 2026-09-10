@@ -55,7 +55,7 @@ def test_apply_now_playing_update() -> None:
         title="New Track",
         artist="New Artist",
         album="New Album",
-        queue_titles=["Song 1", "Song 2"],
+        queue_titles=("Song 1", "Song 2"),
         art_result=None,
     )
 
