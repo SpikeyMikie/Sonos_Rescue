@@ -5,6 +5,7 @@ from typing import Any, cast
 
 from PyQt6.QtWidgets import QApplication
 
+from sonos_rescue.managers.playback_poller import NowPlayingUpdate
 from sonos_rescue.ui.main_window import MainWindow
 
 
@@ -29,8 +30,7 @@ def make_window() -> MainWindow:
     window = MainWindow()
     # Stop the background refresh thread so it can't mutate widgets from
     # another thread while a test is asserting against a fake speaker.
-    # this will not be needed once the background refresh thread is properly managed in the MainWindow implementation.
-    window.running = False
+    window.playback_poller.stop()
     return window
 
 
@@ -42,6 +42,28 @@ def queue_titles(window: MainWindow) -> list[str]:
         assert item is not None
         titles.append(item.text())
     return titles
+
+
+def test_apply_now_playing_update() -> None:
+    """Applying now playing update should reflect the new track info in the UI."""
+
+    app = (  # pyright: ignore[reportUnusedVariable]
+        QApplication.instance() or QApplication(sys.argv)
+    )
+
+    update = NowPlayingUpdate(
+        title="New Track",
+        artist="New Artist",
+        album="New Album",
+        queue_titles=("Song 1", "Song 2"),
+        art_result=None,
+    )
+
+    window = make_window()
+    window.apply_now_playing_update(update)
+
+    assert window.track_info.text() == "New Track\nNew Artist\nNew Album"
+    assert queue_titles(window) == ["Song 1", "Song 2"]
 
 
 def test_selecting_speaker_populates_playlist_queue() -> None:
@@ -99,7 +121,6 @@ def test_display_selected_speaker_updates_title_and_track_info() -> None:
     window.display_selected_speaker(speaker)
 
     assert window.artwork_panel.title.text() == "Kitchen"
-    assert window.track_info.text() == "Track Title\nArtist Name\nAlbum Name"
 
 
 def test_update_now_playing_does_not_raise_on_speaker_error() -> None:

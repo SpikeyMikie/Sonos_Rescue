@@ -1,4 +1,5 @@
 from __future__ import annotations
+from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from typing import cast
@@ -13,6 +14,17 @@ from soco import SoCo  # type: ignore[import-untyped]
 from urllib.request import Request, urlopen
 
 from sonos_rescue.database.database import ArtworkDatabase
+
+
+@dataclass(frozen=True)
+class ArtResult:
+    """Immutable result of an artwork retrieval operation."""
+
+    art_url: str | None  # fully-resolved URL (None if no valid art)
+    art_bytes: bytes | None  # PNG bytes ready to hand to QPixmap.loadFromData
+    is_new: (
+        bool  # True if freshly fetched over HTTP, False if it came from the DB cache
+    )
 
 
 class ArtworkManager:
@@ -59,48 +71,32 @@ class ArtworkManager:
 
         return None
 
-    # Load and display album art from URL
-    def load_art(self, url: str, speaker: SoCo, album_label: QLabel) -> None:
+    def resolve_and_fetch_art(self, url: str, speaker: SoCo) -> ArtResult:
         """
-        Load and display album art from a given URL.
+        Resolve an artwork URL and fetch its bytes.
+
+        Safe to call from a worker thread: touches only plain data and the
+        thread-safe artwork database, never QPixmap/QLabel.
+
         Args:
             url (str): The URL of the album artwork.
             speaker (SoCo): The Sonos speaker instance.
-            album_label (QLabel): The QLabel widget to display the artwork.
         """
         try:
             if not url or url == "None":
-                return
+                return ArtResult(None, None, False)
 
             if not url.startswith("http"):
                 speaker_ip = cast(str, speaker.ip_address)
                 url = f"http://{speaker_ip}:1400{url}"
 
             if not url.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".webp")):
-                return
+                return ArtResult(None, None, False)
 
-            self.current_art_url = url
-
-            if url == self.displayed_art_url:
-                return
-
-            # check if the artwork is already cached in memory
-            if url in self.art_cache:
-                album_label = self.set_album_art(album_label, self.art_cache[url])
-                self.displayed_art_url = url
-                return
-
-            # if the artwork is already cached in the database, load it from there
+            # if the artwork is already cached in the database, use that
             cached_bytes = self.database.get_artwork_data(url)
             if cached_bytes is not None:
-                cached_pixmap = QPixmap()
-                cached_pixmap.loadFromData(cached_bytes)
-                self.art_cache[url] = cached_pixmap
-                if len(self.art_cache) > self.MAX_CACHE:
-                    self.art_cache.pop(next(iter(self.art_cache)))
-                album_label = self.set_album_art(album_label, cached_pixmap)
-                self.displayed_art_url = url
-                return
+                return ArtResult(url, cached_bytes, is_new=False)
 
             # Otherwise fetch it
             req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -114,20 +110,14 @@ class ArtworkManager:
             png_buffer = BytesIO()
             resized_image.save(png_buffer, format="PNG")
 
-            download_pixmap = QPixmap()
-            download_pixmap.loadFromData(png_buffer.getvalue())
-
-            self.art_cache[url] = download_pixmap
-            if len(self.art_cache) > self.MAX_CACHE:
-                self.art_cache.pop(next(iter(self.art_cache)))
             self.database.insert_artwork_data(url, png_buffer.getvalue())
 
-            album_label = self.set_album_art(album_label, download_pixmap)
-
-            self.displayed_art_url = url
+            return ArtResult(url, png_buffer.getvalue(), is_new=True)
 
         except Exception as e:
-            print("Album load error:", e)
+            print("Error loading artwork:", e)
+
+        return ArtResult(None, None, False)
 
     def set_album_art(self, album_label: QLabel, pixmap: QPixmap) -> QLabel:
         """
