@@ -2,17 +2,15 @@
 
 # Standard library imports
 from pathlib import Path
-from typing import Protocol, cast
-from time import sleep
+from typing import Protocol
 from urllib.parse import quote
-import threading
 
 # third-party imports
 from soco import SoCo  # pyright: ignore[reportMissingTypeStubs]
 
 # gui imports
-from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QIcon, QKeySequence, QPixmap, QAction
+from PyQt6.QtCore import QSize, Qt, QThread, QTimer
+from PyQt6.QtGui import QIcon, QKeySequence, QPixmap, QAction, QCloseEvent
 from PyQt6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -35,14 +33,12 @@ from sonos_rescue.ui.rooms_panel import RoomsPanel
 from sonos_rescue.ui.artwork_panel import ArtworkPanel
 from sonos_rescue.database.database import ArtworkDatabase
 from sonos_rescue.ui.playlist_panel import PlaylistPanel
-from sonos_rescue.managers.playback_controller import (
-    NowPlayingUpdate,
-    PlaybackController,
-)
+from sonos_rescue.managers.playback_controller import PlaybackController
+from sonos_rescue.managers.playback_poller import NowPlayingUpdate
+from sonos_rescue.managers.playback_poller import PlaybackPoller
 
 
 class MainWindow(QMainWindow):
-    now_playing_updated = pyqtSignal(object)
 
     def __init__(self, parent: QMainWindow | None = None):
         super().__init__(parent)
@@ -64,11 +60,12 @@ class MainWindow(QMainWindow):
         )
 
         self.art_result: ArtResult | None = None
-        self.now_playing_updated.connect(self.apply_now_playing_update)
         self.artwork_panel = ArtworkPanel()
         self.playlist_panel = PlaylistPanel()
         self.rooms_panel = RoomsPanel(self.speaker_manager, self.playback_controller)
-        self.speaker_manager.speaker_selected.connect(self.display_selected_speaker)
+        self.speaker_manager.speaker_selected.connect(  # pyright: ignore[reportUnknownMemberType]
+            self.display_selected_speaker
+        )
 
         layout_main.addWidget(self.rooms_panel)
         layout_main.addWidget(self.artwork_panel)
@@ -147,9 +144,22 @@ class MainWindow(QMainWindow):
         self.port: int = LocalMusicServer.DEFAULT_PORT
         self.server: LocalMusicServer | None = None
 
-        # Start background refresh thread
-        self.running = True
-        threading.Thread(target=self.refresh_loop, daemon=True).start()
+        # Start background refresh thread for the playback poller
+        self.playback_poller = PlaybackPoller(
+            get_current_speaker=lambda: self.current,
+            artwork_manager=self.artwork_manager,
+        )
+        self.playback_poller_thread = QThread()
+        self.playback_poller.moveToThread(self.playback_poller_thread)
+        self.playback_poller_thread.started.connect(  # pyright: ignore[reportUnknownMemberType]
+            self.playback_poller.run
+        )
+        QTimer.singleShot(  # pyright: ignore[reportUnknownMemberType]
+            0, self.playback_poller_thread.start
+        )  # Start the polling loop immediately
+        self.playback_poller.now_playing_updated.connect(  # pyright: ignore[reportUnknownMemberType]
+            self.apply_now_playing_update
+        )
 
     def play_local_file(self) -> None:
         """Prompt for a local music file, then display its artwork and stream it."""
@@ -198,51 +208,10 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
-    def refresh_loop(self) -> None:
-        """
-        Background worker that refreshes playback information (every 2 secs).
-
-        Runs in a daemon thread, for the lifetime of the application.
-        """
-        while self.running:
-            try:
-                self.update_now_playing()
-            except Exception as e:
-                print("Refresh error:", e)
-            sleep(2)
-
     def update_now_playing(self) -> None:
-        """
-        Update the playback information displayed in the GUI -
-        - Retrieves the currently playing track
-        - refreshes the playback queue
-        - updates the displayed album artwork when it changes.
-        """
-        if not self.current:
-            return
-
-        try:
-            track = self.current.get_current_track_info()
-            art: str | None = track.get("album_art")
-            art_result = None
-            if art:
-                art_result = self.artwork_manager.resolve_and_fetch_art(
-                    art, self.current
-                )
-
-            q = cast(list[QueueItemProtocol], self.current.get_queue())
-            self.now_playing_updated.emit(
-                NowPlayingUpdate(
-                    title=track.get("title", ""),
-                    artist=track.get("artist", ""),
-                    album=track.get("album", ""),
-                    queue_titles=[item.title for item in q],
-                    art_result=art_result,
-                )
-            )
-
-        except Exception as e:
-            print("Now playing update error:", e)
+        """Trigger an immediate poll of the selected speaker."""
+        if self.current:
+            self.playback_poller.poll_once()
 
     def apply_now_playing_update(self, update: NowPlayingUpdate) -> None:
         """Apply a playback snapshot on the Qt main thread."""
@@ -310,6 +279,22 @@ class MainWindow(QMainWindow):
 
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
+
+    def closeEvent(self, a0: QCloseEvent | None) -> None:
+        """Handle the window close event by stopping the playback poller."""
+        poller = getattr(self, "playback_poller", None)
+        if poller is not None:
+            poller.stop()
+            thread = poller.thread()
+            if thread is not None:
+                thread.quit()
+                thread.wait()
+
+        if self.server is not None:
+            self.server.stop()
+
+        if a0 is not None:
+            a0.accept()
 
 
 class QueueItemProtocol(Protocol):
