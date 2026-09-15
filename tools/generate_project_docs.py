@@ -5,6 +5,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SOURCE_ROOT = PROJECT_ROOT / "src" / "sonos_rescue"
 OUTPUT_FILE = PROJECT_ROOT / "docs" / "project-map.md"
+PROJECT_PACKAGE = "sonos_rescue"
 
 EXCLUDED_NAMES = {
     "__pycache__",
@@ -170,7 +171,15 @@ def append_ast_details(nodes: Sequence[ast.AST], prefix: str, lines: list[str]) 
 
 
 def generate_tree(path: Path, prefix: str = "") -> list[str]:
-    """Generate a tree-style representation of a directory."""
+    """Generate a tree-style representation of a directory.
+
+    Args:
+        path (Path): The root directory to generate the tree from.
+        prefix (str, optional): The prefix for the current level of the tree. Defaults to "".
+
+    Returns:
+        list[str]: A list of strings representing the tree structure.
+    """
     entries = sorted(
         (entry for entry in path.iterdir() if not is_excluded(entry)),
         key=lambda item: (item.is_file(), item.name.lower()),
@@ -201,14 +210,88 @@ def generate_tree(path: Path, prefix: str = "") -> list[str]:
     return lines
 
 
-# docstring = ast.get_docstring(node, clean=True)
-# if docstring:
-#     metadata.append((f"doc: {summarize_docstring(docstring)}", []))
+def project_modules(path: Path) -> set[str]:
+    """Return a set of canonical module names available under the source package."""
+    modules: set[str] = set()
+    for entry in path.rglob("*.py"):
+        if is_excluded(entry):
+            continue
+        relative = entry.relative_to(SOURCE_ROOT).with_suffix("")
+        parts = relative.parts
+        if parts[-1] == "__init__":
+            parts = parts[:-1]
+        if parts:
+            modules.add(".".join((PROJECT_PACKAGE, *parts)))
+    return modules
 
 
-def main() -> None:
+def is_internal_import(name: str, modules: set[str]) -> bool:
+    """Return whether an import refers to a module in this project."""
+    return name.startswith(PROJECT_PACKAGE) or any(
+        module == name or module.endswith(f".{name}") for module in modules
+    )
+
+
+def analyze_dependencies(path: Path) -> dict[str, dict[str, set[str]]]:
+    """
+    Analyze Python file dependencies within a directory.
+    Distinguishes between internal and external imports within the project.
+    """
+    dependencies: dict[str, dict[str, set[str]]] = {}
+    modules = project_modules(SOURCE_ROOT)
+
+    for entry in sorted(path.iterdir(), key=lambda item: item.name.lower()):
+        if is_excluded(entry):
+            continue
+        if entry.is_dir():
+            dependencies.update(analyze_dependencies(entry))
+        elif entry.suffix == ".py":
+            source = entry.read_text(encoding="utf-8")
+            tree = ast.parse(source)
+            imports: set[str] = set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    imports.update(alias.name for alias in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    imports.add(node.module)
+
+            dependencies[str(entry.relative_to(SOURCE_ROOT))] = {
+                "internal": {
+                    name for name in imports if is_internal_import(name, modules)
+                },
+                "external": {
+                    name for name in imports if not is_internal_import(name, modules)
+                },
+            }
+
+    return dependencies
+
+
+def render_dependencies(dependencies: dict[str, dict[str, set[str]]]) -> None:
+    """Write dependencies to a separate Markdown file."""
+    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["# Sonos Rescue Dependencies", ""]
+    for file, imports in dependencies.items():
+        sections: list[str] = [f"## {file}"]
+        if imports["internal"]:
+            sections.extend(["", "**internal**"])
+            sections.extend(f"- `{name}`" for name in sorted(imports["internal"]))
+        if imports["external"]:
+            sections.extend(["", "**external**"])
+            sections.extend(f"- `{name}`" for name in sorted(imports["external"]))
+        lines.extend(sections)
+        lines.append("")
+
+    dependencies_file = OUTPUT_FILE.parent / "dependencies.md"
+    dependencies_file.write_text("\n".join(lines), encoding="utf-8")
+    print(f"Dependencies written to {OUTPUT_FILE.parent / 'dependencies.md'}")
+
+
+def render_project_map() -> None:
     """Generate the project map."""
     tree = generate_tree(SOURCE_ROOT)
+    dependencies = analyze_dependencies(SOURCE_ROOT)
+    render_dependencies(dependencies)
 
     content = "\n".join(
         [
@@ -230,4 +313,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    render_project_map()
