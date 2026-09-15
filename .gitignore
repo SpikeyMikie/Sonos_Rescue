@@ -7,13 +7,15 @@ project-notes.md
 project_context.txt
 *.egg-info/
 
-# generated files
-project-map.md
-dependencies.md
-
 # Testing
 __pycache__/
 *.pyc
 .pytest_cache/
 .coverage
 htmlcov/
+
+# specific temp files to ignore
+mermaid-diagram1.png
+mermaid-diagram2.png
+mermaid-diagram3.png
+mermaid-diagram4.png
