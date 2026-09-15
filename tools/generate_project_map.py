@@ -23,11 +23,130 @@ def is_excluded(entry: Path) -> bool:
     return entry.name in EXCLUDED_NAMES or entry.suffix.lower() in EXCLUDED_SUFFIXES
 
 
+def summarize_docstring(docstring: str, limit: int = 130) -> str:
+    """Collapse a docstring into a short single-line summary."""
+    summary = " ".join(docstring.split())
+    return summary if len(summary) <= limit else f"{summary[: limit - 3]}..."
+
+
+def method_visibility(name: str) -> str:
+    """Return the visibility of a method based on its name."""
+    if name.startswith("__") and name.endswith("__"):
+        return "dunder:"
+    if name.startswith("_"):
+        return "private:"
+    return "public:"
+
+
+def append_children(
+    children: Sequence[tuple[str, Sequence[ast.AST]]],
+    prefix: str,
+    lines: list[str],
+) -> None:
+    """Append labelled AST children using tree connectors."""
+    for index, (label, nested_nodes) in enumerate(children):
+        is_last = index == len(children) - 1
+        branch = "└── " if is_last else "├── "
+        lines.append(f"{prefix}{branch}{label}")
+        if nested_nodes:
+            child_prefix = prefix + ("    " if is_last else "│   ")
+            append_ast_details(nested_nodes, child_prefix, lines)
+
+
+def format_annotation(annotation: ast.expr | None) -> str:
+    """Return readable source text for an annotation."""
+    return ast.unparse(annotation) if annotation is not None else ""
+
+
+def format_parameter(argument: ast.arg, default: ast.expr | None = None) -> str:
+    """Format a parameter name, annotation, and optional default value."""
+    parameter = argument.arg
+    annotation = format_annotation(argument.annotation)
+    if annotation:
+        parameter += f": {annotation}"
+    if default is not None:
+        parameter += f" = {ast.unparse(default)}"
+    return parameter
+
+
+def format_function_signature(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> str:
+    """Return a readable function signature from an AST function node."""
+    arguments = node.args
+    positional = [*arguments.posonlyargs, *arguments.args]
+    positional_defaults = [None] * (len(positional) - len(arguments.defaults)) + list(
+        arguments.defaults
+    )
+    parameters = [
+        format_parameter(argument, default)
+        for argument, default in zip(positional, positional_defaults)
+    ]
+    if arguments.posonlyargs:
+        parameters.insert(len(arguments.posonlyargs), "/")
+
+    if arguments.vararg is not None:
+        parameters.append(f"*{format_parameter(arguments.vararg)}")
+    elif arguments.kwonlyargs:
+        parameters.append("*")
+
+    parameters.extend(
+        format_parameter(argument, default)
+        for argument, default in zip(arguments.kwonlyargs, arguments.kw_defaults)
+    )
+    if arguments.kwarg is not None:
+        parameters.append(f"**{format_parameter(arguments.kwarg)}")
+
+    prefix = "async " if isinstance(node, ast.AsyncFunctionDef) else ""
+    return_annotation = format_annotation(node.returns)
+    return_value = f" -> {return_annotation}" if return_annotation else ""
+    return f"{prefix}def {node.name}({', '.join(parameters)}){return_value}"
+
+
+def append_function_details(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+    prefix: str,
+    lines: list[str],
+) -> None:
+    """Append decorators and a docstring beneath a function signature."""
+    metadata: list[tuple[str, Sequence[ast.AST]]] = []
+    if node.decorator_list:
+        decorators = ", ".join(
+            f"@{ast.unparse(decorator)}" for decorator in node.decorator_list
+        )
+        metadata.append((f"decorators: {decorators}", []))
+    docstring = ast.get_docstring(node, clean=True)
+    if docstring:
+        metadata.append((f"doc: {summarize_docstring(docstring)}", []))
+    append_children(metadata, prefix, lines)
+
+
 def append_ast_details(nodes: Sequence[ast.AST], prefix: str, lines: list[str]) -> None:
     """Append AST definitions, nesting class methods beneath their classes."""
-    details: list[tuple[str, Sequence[ast.AST]]] = []
-    for node in nodes:
+    definitions = [
+        node
+        for node in nodes
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+
+    for index, node in enumerate(definitions):
+        is_last = index == len(definitions) - 1
+        branch = "└── " if is_last else "├── "
         if isinstance(node, ast.ClassDef):
+            lines.append(f"{prefix}{branch}class {node.name}")
+            metadata: list[tuple[str, Sequence[ast.AST]]] = []
+            docstring = ast.get_docstring(node, clean=True)
+            if docstring:
+                metadata.append((f"doc: {summarize_docstring(docstring)}", []))
+            if node.bases:
+                bases = ", ".join(ast.unparse(base) for base in node.bases)
+                metadata.append((f"bases: {bases}", []))
+            if node.decorator_list:
+                decorators = ", ".join(
+                    f"@{ast.unparse(decorator)}" for decorator in node.decorator_list
+                )
+                metadata.append((f"decorators: {decorators}", []))
+
             class_children = [
                 child
                 for child in node.body
@@ -35,17 +154,19 @@ def append_ast_details(nodes: Sequence[ast.AST], prefix: str, lines: list[str]) 
                     child, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
                 )
             ]
-            details.append((f"class {node.name}", class_children))
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            details.append((f"def {node.name}()", []))
-
-    for detail_index, (detail, nested_nodes) in enumerate(details):
-        is_last = detail_index == len(details) - 1
-        detail_branch = "└── " if is_last else "├── "
-        lines.append(f"{prefix}{detail_branch}{detail}")
-        if nested_nodes:
-            child_prefix = prefix + ("    " if is_last else "│   ")
-            append_ast_details(nested_nodes, child_prefix, lines)
+            if class_children:
+                metadata.append(("methods", class_children))
+            if metadata:
+                child_prefix = prefix + ("    " if is_last else "│   ")
+                append_children(metadata, child_prefix, lines)
+        else:
+            visibility = method_visibility(node.name)
+            lines.append(
+                f"{prefix}{branch}{visibility} {format_function_signature(node)}"
+            )
+            if node.decorator_list or ast.get_docstring(node, clean=True):
+                child_prefix = prefix + ("    " if is_last else "│   ")
+                append_function_details(node, child_prefix, lines)
 
 
 def generate_tree(path: Path, prefix: str = "") -> list[str]:
@@ -66,10 +187,10 @@ def generate_tree(path: Path, prefix: str = "") -> list[str]:
         if entry.suffix == ".py":
             source = entry.read_text(encoding="utf-8")
             tree = ast.parse(source)
-            docstring = ast.get_docstring(tree)
+            docstring = ast.get_docstring(tree, clean=True)
             if docstring:
                 doc_prefix = prefix + ("    " if is_last else "│   ")
-                lines.append(f"{doc_prefix}├── doc: {docstring}")
+                lines.append(f"{doc_prefix}├── doc: {summarize_docstring(docstring)}")
             detail_prefix = prefix + ("    " if is_last else "│   ")
             append_ast_details(tree.body, detail_prefix, lines)
 
@@ -78,6 +199,11 @@ def generate_tree(path: Path, prefix: str = "") -> list[str]:
             lines.extend(generate_tree(entry, prefix + extension))
 
     return lines
+
+
+# docstring = ast.get_docstring(node, clean=True)
+# if docstring:
+#     metadata.append((f"doc: {summarize_docstring(docstring)}", []))
 
 
 def main() -> None:
