@@ -1,12 +1,14 @@
 # Sonos Rescue Dependencies
 
-## database/database.py
+## Import Dependencies
+
+### `sonos_rescue.database.database`
 
 **external**
 - `sqlite3`
 - `threading`
 
-## managers/artwork_manager.py
+### `sonos_rescue.managers.artwork_manager`
 
 **internal**
 - `sonos_rescue.database.database`
@@ -27,14 +29,14 @@
 - `typing`
 - `urllib.request`
 
-## managers/playback_controller.py
+### `sonos_rescue.managers.playback_controller`
 
 **external**
 - `soco`
 - `soco.exceptions`
 - `typing`
 
-## managers/playback_poller.py
+### `sonos_rescue.managers.playback_poller`
 
 **internal**
 - `sonos_rescue.managers.artwork_manager`
@@ -46,14 +48,14 @@
 - `soco`
 - `typing`
 
-## managers/speaker_manager.py
+### `sonos_rescue.managers.speaker_manager`
 
 **external**
 - `PyQt6.QtCore`
 - `soco`
 - `typing`
 
-## services/local_music_server.py
+### `sonos_rescue.services.local_music_server`
 
 **external**
 - `errno`
@@ -64,30 +66,30 @@
 - `threading`
 - `typing`
 
-## sonos_rescue.py
+### `sonos_rescue.sonos_rescue`
 
 **internal**
-- `ui.main_window`
+- `sonos_rescue.ui.main_window`
 
 **external**
 - `PyQt6.QtWidgets`
 - `sys`
 
-## ui/artwork_panel.py
+### `sonos_rescue.ui.artwork_panel`
 
 **internal**
 - `sonos_rescue.database.database`
 - `sonos_rescue.managers.artwork_manager`
-- `widgets.rainbow_background`
-- `widgets.rainbow_frame`
-- `widgets.scaling_image_label`
+- `sonos_rescue.ui.widgets.rainbow_background`
+- `sonos_rescue.ui.widgets.rainbow_frame`
+- `sonos_rescue.ui.widgets.scaling_image_label`
 
 **external**
 - `PyQt6.QtCore`
 - `PyQt6.QtGui`
 - `PyQt6.QtWidgets`
 
-## ui/main_window.py
+### `sonos_rescue.ui.main_window`
 
 **internal**
 - `sonos_rescue.database.database`
@@ -111,7 +113,7 @@
 - `typing`
 - `urllib.parse`
 
-## ui/playlist_panel.py
+### `sonos_rescue.ui.playlist_panel`
 
 **internal**
 - `sonos_rescue.ui.widgets.rainbow_background`
@@ -121,13 +123,13 @@
 - `PyQt6.QtCore`
 - `PyQt6.QtWidgets`
 
-## ui/room_card.py
+### `sonos_rescue.ui.room_card`
 
 **internal**
 - `sonos_rescue.managers.playback_controller`
-- `transport_controls`
-- `widgets.rainbow_background`
-- `widgets.rainbow_frame`
+- `sonos_rescue.ui.transport_controls`
+- `sonos_rescue.ui.widgets.rainbow_background`
+- `sonos_rescue.ui.widgets.rainbow_frame`
 
 **external**
 - `PyQt6.QtCore`
@@ -136,7 +138,7 @@
 - `soco`
 - `typing`
 
-## ui/rooms_panel.py
+### `sonos_rescue.ui.rooms_panel`
 
 **internal**
 - `sonos_rescue.managers.playback_controller`
@@ -148,7 +150,7 @@
 - `PyQt6.QtWidgets`
 - `soco`
 
-## ui/transport_controls.py
+### `sonos_rescue.ui.transport_controls`
 
 **internal**
 - `sonos_rescue.managers.playback_controller`
@@ -159,33 +161,33 @@
 - `PyQt6.QtGui`
 - `PyQt6.QtWidgets`
 
-## ui/widgets/rainbow_background.py
+### `sonos_rescue.ui.widgets.rainbow_background`
 
 **external**
 - `PyQt6.QtCore`
 - `PyQt6.QtGui`
 - `PyQt6.QtWidgets`
 
-## ui/widgets/rainbow_frame.py
+### `sonos_rescue.ui.widgets.rainbow_frame`
 
 **external**
 - `PyQt6.QtCore`
 - `PyQt6.QtGui`
 - `PyQt6.QtWidgets`
 
-## ui/widgets/scaling_image_label.py
+### `sonos_rescue.ui.widgets.scaling_image_label`
 
 **external**
 - `PyQt6.QtCore`
 - `PyQt6.QtGui`
 - `PyQt6.QtWidgets`
 
-## utils/network.py
+### `sonos_rescue.utils.network`
 
 **external**
 - `socket`
 
-## utils/resources.py
+### `sonos_rescue.utils.resources`
 
 **external**
 - `importlib.abc`

@@ -1,0 +1,65 @@
+classDiagram
+    class class_module_sonos__rescue_database_database_ArtworkDatabase["ArtworkDatabase"]
+    class class_module_sonos__rescue_managers_artwork__manager_ArtResult["ArtResult"]
+    class class_module_sonos__rescue_managers_artwork__manager_ArtworkManager["ArtworkManager"]
+    class class_module_sonos__rescue_managers_playback__controller_PlaybackController["PlaybackController"]
+    class class_module_sonos__rescue_managers_playback__poller_NowPlayingUpdate["NowPlayingUpdate"]
+    class class_module_sonos__rescue_managers_playback__poller_PlaybackPoller["PlaybackPoller"]
+    class class_module_sonos__rescue_managers_speaker__manager_SpeakerManager["SpeakerManager"]
+    class class_module_sonos__rescue_services_local__music__server_LocalMusicServer["LocalMusicServer"]
+    class class_module_sonos__rescue_services_local__music__server_PortInUseError["PortInUseError"]
+    class class_module_sonos__rescue_services_local__music__server_QuietHTTPRequestHandler["QuietHTTPRequestHandler"]
+    class class_module_sonos__rescue_ui_artwork__panel_ArtworkPanel["ArtworkPanel"]
+    class class_module_sonos__rescue_ui_main__window_MainWindow["MainWindow"]
+    class class_module_sonos__rescue_ui_main__window_QueueItemProtocol["QueueItemProtocol"]
+    class class_module_sonos__rescue_ui_playlist__panel_PlaylistPanel["PlaylistPanel"]
+    class class_module_sonos__rescue_ui_room__card_RoomCard["RoomCard"]
+    class class_module_sonos__rescue_ui_rooms__panel_RoomsPanel["RoomsPanel"]
+    class class_module_sonos__rescue_ui_transport__controls_TransportControls["TransportControls"]
+    class class_module_sonos__rescue_ui_widgets_rainbow__background_RainbowBackground["RainbowBackground"]
+    class class_module_sonos__rescue_ui_widgets_rainbow__frame_RainbowFrame["RainbowFrame"]
+    class class_module_sonos__rescue_ui_widgets_scaling__image__label_ScalingImageLabel["ScalingImageLabel"]
+    class external_module_Exception["Exception"]
+    class external_module_QFrame["QFrame"]
+    class external_module_QLabel["QLabel"]
+    class external_module_QMainWindow["QMainWindow"]
+    class external_module_QObject["QObject"]
+    class external_module_QWidget["QWidget"]
+    class external_module_SimpleHTTPRequestHandler["SimpleHTTPRequestHandler"]
+    class_module_sonos__rescue_managers_artwork__manager_ArtworkManager --> class_module_sonos__rescue_database_database_ArtworkDatabase
+    class_module_sonos__rescue_managers_playback__poller_PlaybackPoller --> class_module_sonos__rescue_managers_artwork__manager_ArtworkManager
+    class_module_sonos__rescue_managers_playback__poller_PlaybackPoller ..> class_module_sonos__rescue_managers_playback__poller_NowPlayingUpdate
+    class_module_sonos__rescue_ui_artwork__panel_ArtworkPanel *-- class_module_sonos__rescue_managers_artwork__manager_ArtworkManager
+    class_module_sonos__rescue_ui_artwork__panel_ArtworkPanel *-- class_module_sonos__rescue_ui_widgets_rainbow__background_RainbowBackground
+    class_module_sonos__rescue_ui_artwork__panel_ArtworkPanel *-- class_module_sonos__rescue_ui_widgets_rainbow__frame_RainbowFrame
+    class_module_sonos__rescue_ui_artwork__panel_ArtworkPanel *-- class_module_sonos__rescue_ui_widgets_scaling__image__label_ScalingImageLabel
+    class_module_sonos__rescue_ui_main__window_MainWindow *-- class_module_sonos__rescue_managers_artwork__manager_ArtworkManager
+    class_module_sonos__rescue_ui_main__window_MainWindow *-- class_module_sonos__rescue_managers_playback__controller_PlaybackController
+    class_module_sonos__rescue_ui_main__window_MainWindow *-- class_module_sonos__rescue_managers_playback__poller_PlaybackPoller
+    class_module_sonos__rescue_ui_main__window_MainWindow *-- class_module_sonos__rescue_managers_speaker__manager_SpeakerManager
+    class_module_sonos__rescue_ui_main__window_MainWindow *-- class_module_sonos__rescue_services_local__music__server_LocalMusicServer
+    class_module_sonos__rescue_ui_main__window_MainWindow *-- class_module_sonos__rescue_ui_artwork__panel_ArtworkPanel
+    class_module_sonos__rescue_ui_main__window_MainWindow *-- class_module_sonos__rescue_ui_playlist__panel_PlaylistPanel
+    class_module_sonos__rescue_ui_main__window_MainWindow *-- class_module_sonos__rescue_ui_rooms__panel_RoomsPanel
+    class_module_sonos__rescue_ui_playlist__panel_PlaylistPanel *-- class_module_sonos__rescue_ui_widgets_rainbow__background_RainbowBackground
+    class_module_sonos__rescue_ui_playlist__panel_PlaylistPanel *-- class_module_sonos__rescue_ui_widgets_rainbow__frame_RainbowFrame
+    class_module_sonos__rescue_ui_room__card_RoomCard *-- class_module_sonos__rescue_ui_transport__controls_TransportControls
+    class_module_sonos__rescue_ui_room__card_RoomCard *-- class_module_sonos__rescue_ui_widgets_rainbow__background_RainbowBackground
+    class_module_sonos__rescue_ui_room__card_RoomCard *-- class_module_sonos__rescue_ui_widgets_rainbow__frame_RainbowFrame
+    class_module_sonos__rescue_ui_rooms__panel_RoomsPanel --> class_module_sonos__rescue_managers_playback__controller_PlaybackController
+    class_module_sonos__rescue_ui_rooms__panel_RoomsPanel --> class_module_sonos__rescue_managers_speaker__manager_SpeakerManager
+    class_module_sonos__rescue_ui_rooms__panel_RoomsPanel --> class_module_sonos__rescue_ui_room__card_RoomCard
+    class_module_sonos__rescue_ui_transport__controls_TransportControls --> class_module_sonos__rescue_managers_playback__controller_PlaybackController
+    external_module_QObject <|-- class_module_sonos__rescue_managers_playback__poller_PlaybackPoller
+    external_module_QObject <|-- class_module_sonos__rescue_managers_speaker__manager_SpeakerManager
+    external_module_Exception <|-- class_module_sonos__rescue_services_local__music__server_PortInUseError
+    external_module_SimpleHTTPRequestHandler <|-- class_module_sonos__rescue_services_local__music__server_QuietHTTPRequestHandler
+    external_module_QWidget <|-- class_module_sonos__rescue_ui_artwork__panel_ArtworkPanel
+    external_module_QMainWindow <|-- class_module_sonos__rescue_ui_main__window_MainWindow
+    external_module_QWidget <|-- class_module_sonos__rescue_ui_playlist__panel_PlaylistPanel
+    external_module_QWidget <|-- class_module_sonos__rescue_ui_room__card_RoomCard
+    external_module_QWidget <|-- class_module_sonos__rescue_ui_rooms__panel_RoomsPanel
+    external_module_QWidget <|-- class_module_sonos__rescue_ui_transport__controls_TransportControls
+    external_module_QWidget <|-- class_module_sonos__rescue_ui_widgets_rainbow__background_RainbowBackground
+    external_module_QFrame <|-- class_module_sonos__rescue_ui_widgets_rainbow__frame_RainbowFrame
+    external_module_QLabel <|-- class_module_sonos__rescue_ui_widgets_scaling__image__label_ScalingImageLabel

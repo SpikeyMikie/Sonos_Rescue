@@ -37,13 +37,10 @@ class LocalMusicServer:
         self.httpd: HTTPServer | None = None
 
     def start(self) -> None:
-        """
-        Start the HTTP server in a background thread.
+        """Start the HTTP server in a background thread.
 
-        The server changes the working directory to the configured music
-        folder before serving files. Running the server in a daemon thread
-        allows the GUI to remain responsive while music is streamed to
-        Sonos devices.
+        The server serves files from the configured music folder without
+        changing the process working directory.
         """
         if self.httpd is not None:
             raise RuntimeError("LocalMusicServer is already running")

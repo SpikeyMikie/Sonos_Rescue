@@ -1,0 +1,30 @@
+flowchart TD
+
+    subgraph ui["Ui"]
+        class_module_sonos__rescue_ui_artwork__panel_ArtworkPanel["ArtworkPanel"]
+        class_module_sonos__rescue_ui_main__window_MainWindow["MainWindow"]
+        class_module_sonos__rescue_ui_main__window_QueueItemProtocol["QueueItemProtocol"]
+        class_module_sonos__rescue_ui_playlist__panel_PlaylistPanel["PlaylistPanel"]
+        class_module_sonos__rescue_ui_room__card_RoomCard["RoomCard"]
+        class_module_sonos__rescue_ui_rooms__panel_RoomsPanel["RoomsPanel"]
+        class_module_sonos__rescue_ui_transport__controls_TransportControls["TransportControls"]
+    end
+
+    subgraph widgets["Widgets"]
+        class_module_sonos__rescue_ui_widgets_rainbow__background_RainbowBackground["RainbowBackground"]
+        class_module_sonos__rescue_ui_widgets_rainbow__frame_RainbowFrame["RainbowFrame"]
+        class_module_sonos__rescue_ui_widgets_scaling__image__label_ScalingImageLabel["ScalingImageLabel"]
+    end
+
+    class_module_sonos__rescue_ui_artwork__panel_ArtworkPanel --> class_module_sonos__rescue_ui_widgets_rainbow__background_RainbowBackground
+    class_module_sonos__rescue_ui_artwork__panel_ArtworkPanel --> class_module_sonos__rescue_ui_widgets_rainbow__frame_RainbowFrame
+    class_module_sonos__rescue_ui_artwork__panel_ArtworkPanel --> class_module_sonos__rescue_ui_widgets_scaling__image__label_ScalingImageLabel
+    class_module_sonos__rescue_ui_main__window_MainWindow --> class_module_sonos__rescue_ui_artwork__panel_ArtworkPanel
+    class_module_sonos__rescue_ui_main__window_MainWindow --> class_module_sonos__rescue_ui_playlist__panel_PlaylistPanel
+    class_module_sonos__rescue_ui_main__window_MainWindow --> class_module_sonos__rescue_ui_rooms__panel_RoomsPanel
+    class_module_sonos__rescue_ui_playlist__panel_PlaylistPanel --> class_module_sonos__rescue_ui_widgets_rainbow__background_RainbowBackground
+    class_module_sonos__rescue_ui_playlist__panel_PlaylistPanel --> class_module_sonos__rescue_ui_widgets_rainbow__frame_RainbowFrame
+    class_module_sonos__rescue_ui_room__card_RoomCard --> class_module_sonos__rescue_ui_transport__controls_TransportControls
+    class_module_sonos__rescue_ui_room__card_RoomCard --> class_module_sonos__rescue_ui_widgets_rainbow__background_RainbowBackground
+    class_module_sonos__rescue_ui_room__card_RoomCard --> class_module_sonos__rescue_ui_widgets_rainbow__frame_RainbowFrame
+    class_module_sonos__rescue_ui_rooms__panel_RoomsPanel --> class_module_sonos__rescue_ui_room__card_RoomCard

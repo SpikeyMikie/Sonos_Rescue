@@ -1,0 +1,49 @@
+flowchart LR
+    module_sonos__rescue_database_database["sonos_rescue.database.database"]
+    module_sonos__rescue_managers_artwork__manager["sonos_rescue.managers.artwork_manager"]
+    module_sonos__rescue_managers_playback__controller["sonos_rescue.managers.playback_controller"]
+    module_sonos__rescue_managers_playback__poller["sonos_rescue.managers.playback_poller"]
+    module_sonos__rescue_managers_speaker__manager["sonos_rescue.managers.speaker_manager"]
+    module_sonos__rescue_services_local__music__server["sonos_rescue.services.local_music_server"]
+    module_sonos__rescue_sonos__rescue["sonos_rescue.sonos_rescue"]
+    module_sonos__rescue_ui_artwork__panel["sonos_rescue.ui.artwork_panel"]
+    module_sonos__rescue_ui_main__window["sonos_rescue.ui.main_window"]
+    module_sonos__rescue_ui_playlist__panel["sonos_rescue.ui.playlist_panel"]
+    module_sonos__rescue_ui_room__card["sonos_rescue.ui.room_card"]
+    module_sonos__rescue_ui_rooms__panel["sonos_rescue.ui.rooms_panel"]
+    module_sonos__rescue_ui_transport__controls["sonos_rescue.ui.transport_controls"]
+    module_sonos__rescue_ui_widgets_rainbow__background["sonos_rescue.ui.widgets.rainbow_background"]
+    module_sonos__rescue_ui_widgets_rainbow__frame["sonos_rescue.ui.widgets.rainbow_frame"]
+    module_sonos__rescue_ui_widgets_scaling__image__label["sonos_rescue.ui.widgets.scaling_image_label"]
+    module_sonos__rescue_utils_network["sonos_rescue.utils.network"]
+    module_sonos__rescue_utils_resources["sonos_rescue.utils.resources"]
+    module_sonos__rescue_managers_artwork__manager --> module_sonos__rescue_database_database
+    module_sonos__rescue_managers_playback__poller --> module_sonos__rescue_managers_artwork__manager
+    module_sonos__rescue_sonos__rescue --> module_sonos__rescue_ui_main__window
+    module_sonos__rescue_ui_artwork__panel --> module_sonos__rescue_database_database
+    module_sonos__rescue_ui_artwork__panel --> module_sonos__rescue_managers_artwork__manager
+    module_sonos__rescue_ui_artwork__panel --> module_sonos__rescue_ui_widgets_rainbow__background
+    module_sonos__rescue_ui_artwork__panel --> module_sonos__rescue_ui_widgets_rainbow__frame
+    module_sonos__rescue_ui_artwork__panel --> module_sonos__rescue_ui_widgets_scaling__image__label
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_database_database
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_managers_artwork__manager
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_managers_playback__controller
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_managers_playback__poller
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_managers_speaker__manager
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_services_local__music__server
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_ui_artwork__panel
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_ui_playlist__panel
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_ui_rooms__panel
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_utils_network
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_utils_resources
+    module_sonos__rescue_ui_playlist__panel --> module_sonos__rescue_ui_widgets_rainbow__background
+    module_sonos__rescue_ui_playlist__panel --> module_sonos__rescue_ui_widgets_rainbow__frame
+    module_sonos__rescue_ui_room__card --> module_sonos__rescue_managers_playback__controller
+    module_sonos__rescue_ui_room__card --> module_sonos__rescue_ui_transport__controls
+    module_sonos__rescue_ui_room__card --> module_sonos__rescue_ui_widgets_rainbow__background
+    module_sonos__rescue_ui_room__card --> module_sonos__rescue_ui_widgets_rainbow__frame
+    module_sonos__rescue_ui_rooms__panel --> module_sonos__rescue_managers_playback__controller
+    module_sonos__rescue_ui_rooms__panel --> module_sonos__rescue_managers_speaker__manager
+    module_sonos__rescue_ui_rooms__panel --> module_sonos__rescue_ui_room__card
+    module_sonos__rescue_ui_transport__controls --> module_sonos__rescue_managers_playback__controller
+    module_sonos__rescue_ui_transport__controls --> module_sonos__rescue_utils_resources

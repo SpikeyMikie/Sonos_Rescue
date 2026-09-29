@@ -1,0 +1,45 @@
+flowchart TD
+
+    subgraph ui["UI"]
+        module_sonos__rescue_ui_artwork__panel["ArtworkPanel"]
+        module_sonos__rescue_ui_main__window["MainWindow"]
+        module_sonos__rescue_ui_playlist__panel["PlaylistPanel"]
+        module_sonos__rescue_ui_room__card["RoomCard"]
+        module_sonos__rescue_ui_rooms__panel["RoomsPanel"]
+        module_sonos__rescue_ui_transport__controls["TransportControls"]
+    end
+
+    subgraph managers["Managers"]
+        module_sonos__rescue_managers_artwork__manager["ArtworkManager"]
+        module_sonos__rescue_managers_playback__controller["PlaybackController"]
+        module_sonos__rescue_managers_playback__poller["PlaybackPoller"]
+        module_sonos__rescue_managers_speaker__manager["SpeakerManager"]
+    end
+
+    subgraph services["Services"]
+        module_sonos__rescue_services_local__music__server["LocalMusicServer"]
+    end
+
+    subgraph database["Database"]
+        module_sonos__rescue_database_database["ArtworkDatabase"]
+    end
+
+    module_sonos__rescue_managers_artwork__manager --> module_sonos__rescue_database_database
+    module_sonos__rescue_managers_playback__poller --> module_sonos__rescue_managers_artwork__manager
+    module_sonos__rescue_ui_artwork__panel --> module_sonos__rescue_database_database
+    module_sonos__rescue_ui_artwork__panel --> module_sonos__rescue_managers_artwork__manager
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_database_database
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_managers_artwork__manager
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_managers_playback__controller
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_managers_playback__poller
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_managers_speaker__manager
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_services_local__music__server
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_ui_artwork__panel
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_ui_playlist__panel
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_ui_rooms__panel
+    module_sonos__rescue_ui_room__card --> module_sonos__rescue_managers_playback__controller
+    module_sonos__rescue_ui_room__card --> module_sonos__rescue_ui_transport__controls
+    module_sonos__rescue_ui_rooms__panel --> module_sonos__rescue_managers_playback__controller
+    module_sonos__rescue_ui_rooms__panel --> module_sonos__rescue_managers_speaker__manager
+    module_sonos__rescue_ui_rooms__panel --> module_sonos__rescue_ui_room__card
+    module_sonos__rescue_ui_transport__controls --> module_sonos__rescue_managers_playback__controller
