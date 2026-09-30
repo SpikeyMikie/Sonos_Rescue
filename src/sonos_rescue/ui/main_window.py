@@ -302,14 +302,3 @@ class MainWindow(QMainWindow):
 
         if a0 is not None:
             a0.accept()
-
-
-class QueueItemProtocol(Protocol):
-    """
-    Defines the minimum interface required for Sonos queue items.
-
-    SoCo queue objects contain many attributes, but this application
-    only requires the track title for displaying the queue.
-    """
-
-    title: str

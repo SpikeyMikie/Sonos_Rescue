@@ -1,0 +1,83 @@
+---
+config:
+  layout: elk
+  theme: redux-dark-color
+---
+flowchart TD
+
+    subgraph ui["UI"]
+        module_sonos__rescue_ui_artwork__panel["ArtworkPanel"]
+        module_sonos__rescue_ui_main__window["MainWindow"]
+        module_sonos__rescue_ui_playlist__panel["PlaylistPanel"]
+        module_sonos__rescue_ui_room__card["RoomCard"]
+        module_sonos__rescue_ui_rooms__panel["RoomsPanel"]
+        module_sonos__rescue_ui_transport__controls["TransportControls"]
+    end
+
+    subgraph managers["Managers"]
+        module_sonos__rescue_managers_artwork__manager["ArtworkManager"]
+        module_sonos__rescue_managers_playback__controller["PlaybackController"]
+        module_sonos__rescue_managers_playback__poller["PlaybackPoller"]
+        module_sonos__rescue_managers_speaker__manager["SpeakerManager"]
+    end
+
+    subgraph services["Services"]
+        module_sonos__rescue_services_local__music__server["LocalMusicServer"]
+    end
+
+    subgraph database["Database"]
+        module_sonos__rescue_database_database["ArtworkDatabase"]
+    end
+
+    subgraph external["External systems"]
+        external_PyQt6["PyQt6"]
+        external_http["Local HTTP server"]
+        external_pathlib["Filesystem"]
+        external_soco["SoCo / Sonos"]
+        external_sqlite3["SQLite"]
+        external_urllib["HTTP"]
+    end
+
+    module_sonos__rescue_database_database --> external_sqlite3
+    module_sonos__rescue_managers_artwork__manager --> module_sonos__rescue_database_database
+    module_sonos__rescue_managers_artwork__manager --> external_PyQt6
+    module_sonos__rescue_managers_artwork__manager --> external_pathlib
+    module_sonos__rescue_managers_artwork__manager --> external_soco
+    module_sonos__rescue_managers_artwork__manager --> external_urllib
+    module_sonos__rescue_managers_playback__controller --> external_soco
+    module_sonos__rescue_managers_playback__poller --> module_sonos__rescue_managers_artwork__manager
+    module_sonos__rescue_managers_playback__poller --> external_PyQt6
+    module_sonos__rescue_managers_playback__poller --> external_soco
+    module_sonos__rescue_managers_speaker__manager --> external_PyQt6
+    module_sonos__rescue_managers_speaker__manager --> external_soco
+    module_sonos__rescue_services_local__music__server --> external_http
+    module_sonos__rescue_services_local__music__server --> external_pathlib
+    module_sonos__rescue_ui_artwork__panel --> module_sonos__rescue_database_database
+    module_sonos__rescue_ui_artwork__panel --> module_sonos__rescue_managers_artwork__manager
+    module_sonos__rescue_ui_artwork__panel --> external_PyQt6
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_database_database
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_managers_artwork__manager
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_managers_playback__controller
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_managers_playback__poller
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_managers_speaker__manager
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_services_local__music__server
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_ui_artwork__panel
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_ui_playlist__panel
+    module_sonos__rescue_ui_main__window --> module_sonos__rescue_ui_rooms__panel
+    module_sonos__rescue_ui_main__window --> external_PyQt6
+    module_sonos__rescue_ui_main__window --> external_pathlib
+    module_sonos__rescue_ui_main__window --> external_soco
+    module_sonos__rescue_ui_main__window --> external_urllib
+    module_sonos__rescue_ui_playlist__panel --> external_PyQt6
+    module_sonos__rescue_ui_room__card --> module_sonos__rescue_managers_playback__controller
+    module_sonos__rescue_ui_room__card --> module_sonos__rescue_ui_transport__controls
+    module_sonos__rescue_ui_room__card --> external_PyQt6
+    module_sonos__rescue_ui_room__card --> external_soco
+    module_sonos__rescue_ui_rooms__panel --> module_sonos__rescue_managers_playback__controller
+    module_sonos__rescue_ui_rooms__panel --> module_sonos__rescue_managers_speaker__manager
+    module_sonos__rescue_ui_rooms__panel --> module_sonos__rescue_ui_room__card
+    module_sonos__rescue_ui_rooms__panel --> external_PyQt6
+    module_sonos__rescue_ui_rooms__panel --> external_soco
+    module_sonos__rescue_ui_transport__controls --> module_sonos__rescue_managers_playback__controller
+    module_sonos__rescue_ui_transport__controls --> external_PyQt6
+    module_sonos__rescue_services_local__music__server -->|streams files to| external_soco
