@@ -9,6 +9,7 @@ from tools.generate_project_docs import (
     generate_app_overview,
     generate_class_diagram,
     generate_dependency_diagram,
+    generate_diagrams,
     scan_project,
 )
 
@@ -106,6 +107,24 @@ def test_class_diagram_shows_relationship_types() -> None:
     assert ClassRelationship(server, port_error, "dependency") in relationships
     assert ClassRelationship(server, handler, "inheritance") not in relationships
     assert ClassRelationship(server, port_error, "inheritance") not in relationships
+
+
+def test_diagrams_include_requested_mermaid_configurations() -> None:
+    source_root = Path(__file__).parents[2] / "src" / "sonos_rescue"
+    diagrams = generate_diagrams(scan_project(source_root))
+
+    expected = {
+        "app-overview": "    layout: elk\n    theme: redux-dark-color",
+        "architecture": "    layout: elk\n    theme: neo-dark",
+        "ui-architecture": "    layout: elk\n    theme: redux-dark-color",
+        "class-relationships": (
+            "    layout: elk\n    theme: redux-dark-color\n"
+            "    class:\n        hideEmptyMembersBox: true"
+        ),
+        "dependencies": "    theme: neo-dark\n    layout: elk",
+    }
+    for name, config in expected.items():
+        assert diagrams[name].startswith(f"---\nconfig:\n{config}\n---\n")
 
 
 def test_app_overview_stays_at_component_level() -> None:

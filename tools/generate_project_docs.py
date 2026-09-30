@@ -20,6 +20,29 @@ EXCLUDED_NAMES = {
     ".venv",
 }
 EXCLUDED_SUFFIXES = {".png"}
+DIAGRAM_CONFIGS: dict[str, dict[str, str | dict[str, bool]]] = {
+    "app-overview": {
+        "layout": "elk",
+        "theme": "redux-dark-color",
+    },
+    "architecture": {
+        "layout": "elk",
+        "theme": "redux-dark-color",
+    },
+    "ui-architecture": {
+        "layout": "elk",
+        "theme": "redux-dark-color",
+    },
+    "class-relationships": {
+        "layout": "elk",
+        "theme": "redux-dark-color",
+        "class": {"hideEmptyMembersBox": True},
+    },
+    "dependencies": {
+        "theme": "neo-dark",
+        "layout": "elk",
+    },
+}
 
 
 @dataclass
@@ -748,6 +771,33 @@ def generate_dependency_diagram(project: ProjectModel) -> str:
     return "\n".join([*lines, ""])
 
 
+def generate_diagrams(project: ProjectModel) -> dict[str, str]:
+    """Generate diagram sources with their per-diagram Mermaid configuration."""
+    generators = {
+        "app-overview": generate_app_overview,
+        "architecture": generate_architecture_diagram,
+        "ui-architecture": generate_ui_diagram,
+        "class-relationships": generate_class_diagram,
+        "dependencies": generate_dependency_diagram,
+    }
+    diagrams: dict[str, str] = {}
+    for name, generator in generators.items():
+        config = DIAGRAM_CONFIGS[name]
+        config_lines = ["---", "config:"]
+        for key, value in config.items():
+            if isinstance(value, dict):
+                config_lines.append(f"    {key}:")
+                config_lines.extend(
+                    f"        {nested_key}: {str(nested_value).lower()}"
+                    for nested_key, nested_value in value.items()
+                )
+            else:
+                config_lines.append(f"    {key}: {value}")
+        config_lines.append("---")
+        diagrams[name] = "\n".join([*config_lines, generator(project)])
+    return diagrams
+
+
 def _module_summary(module: ProjectModule) -> str:
     docstring = ast.get_docstring(module.tree, clean=True)
     if docstring:
@@ -924,13 +974,7 @@ def render_project_map(project: ProjectModel) -> None:
     docs_dir = PROJECT_ROOT / "docs"
     diagrams_dir = docs_dir / "diagrams"
     diagrams_dir.mkdir(parents=True, exist_ok=True)
-    diagrams = {
-        "app-overview": generate_app_overview(project),
-        "architecture": generate_architecture_diagram(project),
-        "ui-architecture": generate_ui_diagram(project),
-        "class-relationships": generate_class_diagram(project),
-        "dependencies": generate_dependency_diagram(project),
-    }
+    diagrams = generate_diagrams(project)
     for name, source in diagrams.items():
         (diagrams_dir / f"{name}.mmd").write_text(source, encoding="utf-8")
 

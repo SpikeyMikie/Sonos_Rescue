@@ -75,6 +75,11 @@ From the repository root, run `python tools/generate_project_docs.py`. The AST s
 ### App Overview
 
 ```mermaid
+---
+config:
+    layout: elk
+    theme: redux-dark-color
+---
 flowchart TD
 
     subgraph ui["UI"]
@@ -127,6 +132,11 @@ Source: [`diagrams/app-overview.mmd`](diagrams/app-overview.mmd).
 ### Architecture
 
 ```mermaid
+---
+config:
+    layout: elk
+    theme: redux-dark-color
+---
 flowchart TD
 
     subgraph ui["UI"]
@@ -212,6 +222,11 @@ Source: [`diagrams/architecture.mmd`](diagrams/architecture.mmd).
 ### UI Architecture
 
 ```mermaid
+---
+config:
+    layout: elk
+    theme: redux-dark-color
+---
 flowchart TD
 
     subgraph ui["Ui"]
@@ -249,6 +264,13 @@ Source: [`diagrams/ui-architecture.mmd`](diagrams/ui-architecture.mmd).
 ### Class Relationships
 
 ```mermaid
+---
+config:
+    layout: elk
+    theme: redux-dark-color
+    class:
+        hideEmptyMembersBox: true
+---
 classDiagram
     class class_module_sonos__rescue_database_database_ArtworkDatabase["ArtworkDatabase"]
     class class_module_sonos__rescue_managers_artwork__manager_ArtResult["ArtResult"]
@@ -328,6 +350,11 @@ Source: [`diagrams/class-relationships.mmd`](diagrams/class-relationships.mmd).
 ### Dependencies
 
 ```mermaid
+---
+config:
+    theme: neo-dark
+    layout: elk
+---
 flowchart LR
     module_sonos__rescue_database_database["sonos_rescue.database.database"]
     module_sonos__rescue_managers_artwork__manager["sonos_rescue.managers.artwork_manager"]
