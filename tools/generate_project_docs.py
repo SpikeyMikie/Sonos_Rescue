@@ -771,7 +771,9 @@ def generate_dependency_diagram(project: ProjectModel) -> str:
     return "\n".join([*lines, ""])
 
 
-def generate_diagrams(project: ProjectModel) -> dict[str, str]:
+def generate_diagrams(
+    project: ProjectModel, *, markdown_compatible: bool = False
+) -> dict[str, str]:
     """Generate diagram sources with their per-diagram Mermaid configuration."""
     generators = {
         "app-overview": generate_app_overview,
@@ -782,17 +784,19 @@ def generate_diagrams(project: ProjectModel) -> dict[str, str]:
     }
     diagrams: dict[str, str] = {}
     for name, generator in generators.items():
-        config = DIAGRAM_CONFIGS[name]
+        config = DIAGRAM_CONFIGS[name].copy()
+        if markdown_compatible and name == "architecture":
+            config.pop("layout", None)
         config_lines = ["---", "config:"]
         for key, value in config.items():
             if isinstance(value, dict):
-                config_lines.append(f"    {key}:")
+                config_lines.append(f"  {key}:")
                 config_lines.extend(
-                    f"        {nested_key}: {str(nested_value).lower()}"
+                    f"    {nested_key}: {str(nested_value).lower()}"
                     for nested_key, nested_value in value.items()
                 )
             else:
-                config_lines.append(f"    {key}: {value}")
+                config_lines.append(f"  {key}: {value}")
         config_lines.append("---")
         diagrams[name] = "\n".join([*config_lines, generator(project)])
     return diagrams
@@ -994,7 +998,10 @@ def render_project_map(project: ProjectModel) -> None:
     )
     OUTPUT_FILE.write_text(project_map, encoding="utf-8")
     (docs_dir / "architecture.md").write_text(
-        generate_architecture_markdown(project, diagrams), encoding="utf-8"
+        generate_architecture_markdown(
+            project, generate_diagrams(project, markdown_compatible=True)
+        ),
+        encoding="utf-8",
     )
     (docs_dir / "dependencies.md").write_text(
         generate_dependencies_markdown(project), encoding="utf-8"

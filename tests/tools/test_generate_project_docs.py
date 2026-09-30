@@ -114,17 +114,24 @@ def test_diagrams_include_requested_mermaid_configurations() -> None:
     diagrams = generate_diagrams(scan_project(source_root))
 
     expected = {
-        "app-overview": "    layout: elk\n    theme: redux-dark-color",
-        "architecture": "    layout: elk\n    theme: neo-dark",
-        "ui-architecture": "    layout: elk\n    theme: redux-dark-color",
+        "app-overview": "  layout: elk\n  theme: redux-dark-color",
+        "architecture": "  layout: elk\n  theme: redux-dark-color",
+        "ui-architecture": "  layout: elk\n  theme: redux-dark-color",
         "class-relationships": (
-            "    layout: elk\n    theme: redux-dark-color\n"
-            "    class:\n        hideEmptyMembersBox: true"
+            "  layout: elk\n  theme: redux-dark-color\n"
+            "  class:\n    hideEmptyMembersBox: true"
         ),
-        "dependencies": "    theme: neo-dark\n    layout: elk",
+        "dependencies": "  theme: neo-dark\n  layout: elk",
     }
     for name, config in expected.items():
         assert diagrams[name].startswith(f"---\nconfig:\n{config}\n---\n")
+
+    markdown_diagrams = generate_diagrams(
+        scan_project(source_root), markdown_compatible=True
+    )
+    assert "layout: elk" in diagrams["architecture"].split("---", 2)[1]
+    assert "layout:" not in markdown_diagrams["architecture"].split("---", 2)[1]
+    assert "theme: redux-dark-color" in markdown_diagrams["architecture"]
 
 
 def test_app_overview_stays_at_component_level() -> None:

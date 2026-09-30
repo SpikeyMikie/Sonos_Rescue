@@ -77,8 +77,8 @@ From the repository root, run `python tools/generate_project_docs.py`. The AST s
 ```mermaid
 ---
 config:
-    layout: elk
-    theme: redux-dark-color
+  layout: elk
+  theme: redux-dark-color
 ---
 flowchart TD
 
@@ -134,8 +134,7 @@ Source: [`diagrams/app-overview.mmd`](diagrams/app-overview.mmd).
 ```mermaid
 ---
 config:
-    layout: elk
-    theme: redux-dark-color
+  theme: redux-dark-color
 ---
 flowchart TD
 
@@ -224,15 +223,14 @@ Source: [`diagrams/architecture.mmd`](diagrams/architecture.mmd).
 ```mermaid
 ---
 config:
-    layout: elk
-    theme: redux-dark-color
+  layout: elk
+  theme: redux-dark-color
 ---
 flowchart TD
 
     subgraph ui["Ui"]
         class_module_sonos__rescue_ui_artwork__panel_ArtworkPanel["ArtworkPanel"]
         class_module_sonos__rescue_ui_main__window_MainWindow["MainWindow"]
-        class_module_sonos__rescue_ui_main__window_QueueItemProtocol["QueueItemProtocol"]
         class_module_sonos__rescue_ui_playlist__panel_PlaylistPanel["PlaylistPanel"]
         class_module_sonos__rescue_ui_room__card_RoomCard["RoomCard"]
         class_module_sonos__rescue_ui_rooms__panel_RoomsPanel["RoomsPanel"]
@@ -266,10 +264,10 @@ Source: [`diagrams/ui-architecture.mmd`](diagrams/ui-architecture.mmd).
 ```mermaid
 ---
 config:
-    layout: elk
-    theme: redux-dark-color
-    class:
-        hideEmptyMembersBox: true
+  layout: elk
+  theme: redux-dark-color
+  class:
+    hideEmptyMembersBox: true
 ---
 classDiagram
     class class_module_sonos__rescue_database_database_ArtworkDatabase["ArtworkDatabase"]
@@ -284,7 +282,6 @@ classDiagram
     class class_module_sonos__rescue_services_local__music__server_QuietHTTPRequestHandler["QuietHTTPRequestHandler"]
     class class_module_sonos__rescue_ui_artwork__panel_ArtworkPanel["ArtworkPanel"]
     class class_module_sonos__rescue_ui_main__window_MainWindow["MainWindow"]
-    class class_module_sonos__rescue_ui_main__window_QueueItemProtocol["QueueItemProtocol"]
     class class_module_sonos__rescue_ui_playlist__panel_PlaylistPanel["PlaylistPanel"]
     class class_module_sonos__rescue_ui_room__card_RoomCard["RoomCard"]
     class class_module_sonos__rescue_ui_rooms__panel_RoomsPanel["RoomsPanel"]
@@ -352,8 +349,8 @@ Source: [`diagrams/class-relationships.mmd`](diagrams/class-relationships.mmd).
 ```mermaid
 ---
 config:
-    theme: neo-dark
-    layout: elk
+  theme: neo-dark
+  layout: elk
 ---
 flowchart LR
     module_sonos__rescue_database_database["sonos_rescue.database.database"]

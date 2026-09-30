@@ -150,29 +150,26 @@ sonos_rescue
 │   │           └── public: def display_artwork(self, pixmap: QPixmap | None) -> None
 │   │               └── doc: Update the displayed artwork, or clear it if pixmap is None.
 │   ├── main_window.py
-│   │   ├── class MainWindow
-│   │   │   ├── bases: QMainWindow
-│   │   │   └── methods
-│   │   │       ├── dunder: def __init__(self, parent: QMainWindow | None = None)
-│   │   │       ├── public: def play_local_file(self) -> None
-│   │   │       │   └── doc: Prompt for a local music file, then display its artwork and stream it.
-│   │   │       ├── public: def display_local_artwork(self, file_path: Path) -> None
-│   │   │       │   └── doc: Extract and display any embedded album artwork for a local file.
-│   │   │       ├── public: def stream_local_file(self, file_path: Path) -> None
-│   │   │       │   └── doc: Serve a local file over HTTP and instruct the selected speaker to play it.
-│   │   │       ├── public: def update_now_playing(self) -> None
-│   │   │       │   └── doc: Trigger an immediate poll of the selected speaker.
-│   │   │       ├── public: def apply_now_playing_update(self, update: NowPlayingUpdate) -> None
-│   │   │       │   └── doc: Apply a playback snapshot on the Qt main thread.
-│   │   │       ├── public: def display_selected_speaker(self, speaker: SoCo) -> None
-│   │   │       │   └── doc: Update the GUI to reflect the currently selected Sonos speaker.
-│   │   │       ├── public: def add_to_queue(self) -> None
-│   │   │       │   └── doc: Add a network stream or Sonos-compatible URI to the playback queue. Prompts the user for a URI and updates the displayed queue ...
-│   │   │       └── public: def closeEvent(self, a0: QCloseEvent | None) -> None
-│   │   │           └── doc: Handle the window close event by stopping the playback poller.
-│   │   └── class QueueItemProtocol
-│   │       ├── doc: Defines the minimum interface required for Sonos queue items. SoCo queue objects contain many attributes, but this application ...
-│   │       └── bases: Protocol
+│   │   └── class MainWindow
+│   │       ├── bases: QMainWindow
+│   │       └── methods
+│   │           ├── dunder: def __init__(self, parent: QMainWindow | None = None)
+│   │           ├── public: def play_local_file(self) -> None
+│   │           │   └── doc: Prompt for a local music file, then display its artwork and stream it.
+│   │           ├── public: def display_local_artwork(self, file_path: Path) -> None
+│   │           │   └── doc: Extract and display any embedded album artwork for a local file.
+│   │           ├── public: def stream_local_file(self, file_path: Path) -> None
+│   │           │   └── doc: Serve a local file over HTTP and instruct the selected speaker to play it.
+│   │           ├── public: def update_now_playing(self) -> None
+│   │           │   └── doc: Trigger an immediate poll of the selected speaker.
+│   │           ├── public: def apply_now_playing_update(self, update: NowPlayingUpdate) -> None
+│   │           │   └── doc: Apply a playback snapshot on the Qt main thread.
+│   │           ├── public: def display_selected_speaker(self, speaker: SoCo) -> None
+│   │           │   └── doc: Update the GUI to reflect the currently selected Sonos speaker.
+│   │           ├── public: def add_to_queue(self) -> None
+│   │           │   └── doc: Add a network stream or Sonos-compatible URI to the playback queue. Prompts the user for a URI and updates the displayed queue ...
+│   │           └── public: def closeEvent(self, a0: QCloseEvent | None) -> None
+│   │               └── doc: Handle the window close event by stopping the playback poller.
 │   ├── playlist_panel.py
 │   │   └── class PlaylistPanel
 │   │       ├── bases: QWidget
