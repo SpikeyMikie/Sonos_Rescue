@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 from tools.generate_project_docs import (
+    ClassRelationship,
     discover_class_relationships,
     generate_app_overview,
     generate_class_diagram,
@@ -90,11 +91,21 @@ def test_dependency_diagram_uses_unique_canonical_module_nodes() -> None:
 
 def test_class_diagram_shows_relationship_types() -> None:
     source_root = Path(__file__).parents[2] / "src" / "sonos_rescue"
-    diagram = generate_class_diagram(scan_project(source_root))
+    project = scan_project(source_root)
+    diagram = generate_class_diagram(project)
 
     assert "<|--" in diagram
     assert "*--" in diagram
     assert "..>" in diagram
+
+    relationships = discover_class_relationships(project)
+    server = "sonos_rescue.services.local_music_server.LocalMusicServer"
+    handler = "sonos_rescue.services.local_music_server.QuietHTTPRequestHandler"
+    port_error = "sonos_rescue.services.local_music_server.PortInUseError"
+    assert ClassRelationship(server, handler, "dependency") in relationships
+    assert ClassRelationship(server, port_error, "dependency") in relationships
+    assert ClassRelationship(server, handler, "inheritance") not in relationships
+    assert ClassRelationship(server, port_error, "inheritance") not in relationships
 
 
 def test_app_overview_stays_at_component_level() -> None:

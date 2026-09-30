@@ -355,11 +355,42 @@ def _is_protocol(class_node: ast.ClassDef) -> bool:
     )
 
 
+def _annotation_class_references(
+    annotation: ast.expr,
+    module: ProjectModule,
+    classes: dict[str, tuple[ProjectModule, ast.ClassDef]],
+) -> set[str]:
+    """Resolve project classes referenced in an annotation, including strings."""
+    references: set[str] = set()
+
+    def visit(expression: ast.expr) -> None:
+        if isinstance(expression, ast.Constant) and isinstance(expression.value, str):
+            try:
+                forward_expression = ast.parse(expression.value, mode="eval").body
+            except SyntaxError:
+                return
+            visit(forward_expression)
+            return
+
+        if isinstance(expression, (ast.Name, ast.Attribute)):
+            reference = _class_reference(expression, module, classes)
+            if reference:
+                references.add(reference)
+
+        for child in ast.iter_child_nodes(expression):
+            visit(child)
+
+    visit(annotation)
+    return references
+
+
 def discover_class_relationships(project: ProjectModel) -> set[ClassRelationship]:
-    """Discover class relationships from bases, typed attributes, and construction."""
+    """Discover class relationships from annotations, bases, and construction."""
     classes = project.classes
     relationships: set[ClassRelationship] = set()
+
     for qualified_name, (module, class_node) in classes.items():
+        # Explicit base classes represent inheritance or protocol realisation.
         for base in class_node.bases:
             target = _class_reference(base, module, classes)
             if target:
@@ -368,6 +399,40 @@ def discover_class_relationships(project: ProjectModel) -> set[ClassRelationship
                 )
                 relationships.add(ClassRelationship(qualified_name, target, kind))
 
+        # Annotations represent dependencies; annotated fields represent associations.
+        class_level_annotations = {id(node) for node in class_node.body}
+        for node in ast.walk(class_node):
+            annotations: list[ast.expr] = []
+
+            if isinstance(node, ast.arg) and node.annotation is not None:
+                annotations.append(node.annotation)
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if node.returns is not None:
+                    annotations.append(node.returns)
+            elif isinstance(node, ast.AnnAssign):
+                annotations.append(node.annotation)
+
+            if not annotations:
+                continue
+
+            is_attribute = isinstance(node, ast.AnnAssign) and (
+                id(node) in class_level_annotations
+                or (
+                    isinstance(node.target, ast.Attribute)
+                    and isinstance(node.target.value, ast.Name)
+                    and node.target.value.id == "self"
+                )
+            )
+            kind = "association" if is_attribute else "dependency"
+
+            for annotation in annotations:
+                for target in _annotation_class_references(annotation, module, classes):
+                    if target != qualified_name:
+                        relationships.add(
+                            ClassRelationship(qualified_name, target, kind)
+                        )
+
+        # Preserve constructor-based composition and typed self-attribute detection.
         for method in (
             item
             for item in class_node.body
@@ -378,26 +443,52 @@ def discover_class_relationships(project: ProjectModel) -> set[ClassRelationship
                 *method.args.args,
                 *method.args.kwonlyargs,
             ]
-            argument_types = {
-                arg.arg: _class_reference(arg.annotation, module, classes)
+            argument_types: dict[str, str | None] = {
+                arg.arg: next(
+                    iter(_annotation_class_references(arg.annotation, module, classes)),
+                    None,
+                )
                 for arg in args
                 if arg.annotation is not None
             }
+
             for arg in (method.args.vararg, method.args.kwarg):
                 if arg and arg.annotation:
-                    argument_types[arg.arg] = _class_reference(
-                        arg.annotation, module, classes
+                    argument_types[arg.arg] = next(
+                        iter(
+                            _annotation_class_references(
+                                arg.annotation, module, classes
+                            )
+                        ),
+                        None,
                     )
 
             for node in ast.walk(method):
+                if isinstance(node, ast.Call):
+                    passed_classes = [
+                        *node.args,
+                        *(keyword.value for keyword in node.keywords),
+                    ]
+                    for expression in passed_classes:
+                        target = _class_reference(expression, module, classes)
+                        if target and target != qualified_name:
+                            relationships.add(
+                                ClassRelationship(qualified_name, target, "dependency")
+                            )
+
+                if isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call):
+                    target = _class_reference(node.exc.func, module, classes)
+                    if target and target != qualified_name:
+                        relationships.add(
+                            ClassRelationship(qualified_name, target, "dependency")
+                        )
+
                 value: ast.expr | None = None
                 targets: list[ast.expr] = []
                 if isinstance(node, ast.Assign):
                     value, targets = node.value, node.targets
                 elif isinstance(node, ast.AnnAssign):
                     value, targets = node.value, [node.target]
-                if value is None:
-                    continue
 
                 for target in targets:
                     is_self_attribute = (
@@ -405,16 +496,12 @@ def discover_class_relationships(project: ProjectModel) -> set[ClassRelationship
                         and isinstance(target.value, ast.Name)
                         and target.value.id == "self"
                     )
-                    if is_self_attribute and isinstance(value, ast.Name):
+                    if (
+                        value is not None
+                        and is_self_attribute
+                        and isinstance(value, ast.Name)
+                    ):
                         related = argument_types.get(value.id)
-                        if related:
-                            relationships.add(
-                                ClassRelationship(
-                                    qualified_name, related, "association"
-                                )
-                            )
-                    if is_self_attribute and isinstance(node, ast.AnnAssign):
-                        related = _class_reference(node.annotation, module, classes)
                         if related:
                             relationships.add(
                                 ClassRelationship(
@@ -439,6 +526,7 @@ def discover_class_relationships(project: ProjectModel) -> set[ClassRelationship
                         relationships.add(
                             ClassRelationship(qualified_name, constructed, kind)
                         )
+
     priority = {
         "dependency": 0,
         "association": 1,
@@ -452,6 +540,7 @@ def discover_class_relationships(project: ProjectModel) -> set[ClassRelationship
         existing = strongest.get(key)
         if existing is None or priority[relationship.kind] > priority[existing.kind]:
             strongest[key] = relationship
+
     return set(strongest.values())
 
 
@@ -681,7 +770,7 @@ def _module_summary(module: ProjectModule) -> str:
 
 def _render_layer(project: ProjectModel, layer: str) -> list[str]:
     components = _components(project)
-    lines = []
+    lines: list[str] = []
     for module_name in sorted(components):
         if _layer(module_name) != layer:
             continue
