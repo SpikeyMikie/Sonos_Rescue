@@ -15,7 +15,4 @@ __pycache__/
 htmlcov/
 
 # specific temp files to ignore
-mermaid-diagram1.png
-mermaid-diagram2.png
-mermaid-diagram3.png
-mermaid-diagram4.png
+

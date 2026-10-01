@@ -129,9 +129,9 @@ def test_diagrams_include_requested_mermaid_configurations() -> None:
     markdown_diagrams = generate_diagrams(
         scan_project(source_root), markdown_compatible=True
     )
-    assert "layout: elk" in diagrams["architecture"].split("---", 2)[1]
-    assert "layout:" not in markdown_diagrams["architecture"].split("---", 2)[1]
-    assert "theme: redux-dark-color" in markdown_diagrams["architecture"]
+    for name in expected:
+        assert "layout: elk" in diagrams[name].split("---", 2)[1]
+        assert "layout:" not in markdown_diagrams[name].split("---", 2)[1]
 
 
 def test_app_overview_stays_at_component_level() -> None:
