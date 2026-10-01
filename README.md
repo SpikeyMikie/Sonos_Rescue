@@ -16,7 +16,17 @@ The core desktop controller is implemented, including speaker discovery, playbac
 
 ## Roadmap
 
-The project is still evolving, and features such as playlist management, broader platform support, config settings and further UI refinement remain under development.
+**Planned**
+
+- Playlist support and management
+- Enhanced queue management
+- Application settings
+- Further UI refinement
+- Broader platform support
+
+**Future Research**
+
+- Embedded or Raspberry Pi experiments
 
 ---
 
@@ -28,12 +38,29 @@ The project is still evolving, and features such as playlist management, broader
 - Adjust speaker volume and mute state.
 - Browse and play music from a local folder.
 - Stream local music files to Sonos devices through a directory-bound HTTP server.
-- Display track metadata, queue information, and playback state.
+- Display the current playback queue; saved playlist management is planned
+- Display track metadata and playback state.
 - Retrieve and display album artwork.
 - Cache album artwork locally using SQLite to reduce repeated network requests.
 - Poll playback information in a background worker to keep the UI responsive.
-- Automated project map, dependency, architecture documentation, and Mermaid diagrams from the Python source tree.
-- Automated tests for database, networking, playback, artwork, server, and UI components.
+
+---
+
+### Engineering Highlights
+
+- Automated Documentation Generator from the Python source tree, including:
+    - Project map
+    - Dependency report
+    - Architecture guide
+    - Mermaid diagrams
+
+- Automated tests for:
+    - database
+    - networking
+    - playback
+    - artwork
+    - server
+    - UI components
 
 ---
 
