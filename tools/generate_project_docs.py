@@ -785,7 +785,7 @@ def generate_diagrams(
     diagrams: dict[str, str] = {}
     for name, generator in generators.items():
         config = DIAGRAM_CONFIGS[name].copy()
-        if markdown_compatible and name == "architecture":
+        if markdown_compatible:
             config.pop("layout", None)
         config_lines = ["---", "config:"]
         for key, value in config.items():

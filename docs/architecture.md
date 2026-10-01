@@ -77,7 +77,6 @@ From the repository root, run `python tools/generate_project_docs.py`. The AST s
 ```mermaid
 ---
 config:
-  layout: elk
   theme: redux-dark-color
 ---
 flowchart TD
@@ -223,7 +222,6 @@ Source: [`diagrams/architecture.mmd`](diagrams/architecture.mmd).
 ```mermaid
 ---
 config:
-  layout: elk
   theme: redux-dark-color
 ---
 flowchart TD
@@ -264,7 +262,6 @@ Source: [`diagrams/ui-architecture.mmd`](diagrams/ui-architecture.mmd).
 ```mermaid
 ---
 config:
-  layout: elk
   theme: redux-dark-color
   class:
     hideEmptyMembersBox: true
@@ -350,7 +347,6 @@ Source: [`diagrams/class-relationships.mmd`](diagrams/class-relationships.mmd).
 ---
 config:
   theme: neo-dark
-  layout: elk
 ---
 flowchart LR
     module_sonos__rescue_database_database["sonos_rescue.database.database"]
