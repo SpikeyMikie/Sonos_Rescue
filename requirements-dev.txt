@@ -1,5 +1,6 @@
 -r requirements.txt
-mypy
-pytest
-pytest-cov
-black
+
+mypy==2.3.0
+pytest==9.1.1
+pyright==1.1.411
+black==26.5.1
