@@ -1,5 +1,5 @@
-from importlib.abc import Traversable
 from importlib.resources import files
+from importlib.resources.abc import Traversable
 
 
 def resource_path(filename: str) -> Traversable:
